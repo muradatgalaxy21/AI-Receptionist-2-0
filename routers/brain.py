@@ -2,8 +2,8 @@ import os
 import json
 import base64
 import asyncio
-from dotenv import load_dotenv
-
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
 # We ONLY import the Client. We do not import LiveOptions.
 from deepgram import DeepgramClient
 
