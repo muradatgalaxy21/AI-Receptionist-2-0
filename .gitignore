@@ -1,6 +1,11 @@
 .env
+
+venv/
+__pycache__/
+=======
 ai-recep-venv/
 .ai-recep-venv/
 __pycache__/
 *.pyc
 .DS_Store
+
