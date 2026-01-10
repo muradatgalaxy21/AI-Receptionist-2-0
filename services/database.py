@@ -1,3 +1,7 @@
+# Run this command in terminal to create database at your end
+# NEVER push DB on git
+# python services/database.py
+
 import sqlite3
 from datetime import datetime
 
