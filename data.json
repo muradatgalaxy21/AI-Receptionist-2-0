@@ -1,0 +1,24 @@
+{
+  "clinic_info": {
+    "name": "Dr. Farooq's Dental Clinic",
+    "doctor": "Dr. Syed Farooq Ali",
+    "location": "DHA Phase 5, Lahore",
+    "contact": "+1-555-0199"
+  },
+  "timings": {
+    "Monday": "10:00 AM - 08:00 PM",
+    "Tuesday": "10:00 AM - 08:00 PM",
+    "Wednesday": "10:00 AM - 08:00 PM",
+    "Thursday": "10:00 AM - 08:00 PM",
+    "Friday": "10:00 AM - 08:00 PM",
+    "Saturday": "10:00 AM - 08:00 PM",
+    "Sunday": "Closed"
+  },
+  "services_price_list": {
+    "Consultation": "2000 PKR",
+    "Scaling_Cleaning": "5000 PKR",
+    "Root_Canal": "Starts from 15000 PKR",
+    "Braces": "Consultation Required",
+    "Extraction": "3000 PKR"
+  }
+}

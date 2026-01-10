@@ -1,3 +1,4 @@
+
 import os
 import json
 import base64
@@ -95,3 +96,4 @@ async def process_audio_stream(websocket):
         # Only finish if the connection was actually created
         if dg_connection:
             await dg_connection.finish()
+
