@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from routers import twilio
-# from routers import deepgram  <-- IGNORE AHAD'S FILE FOR NOW
+from routers import brain
 
 # Load environment variables
 load_dotenv()
@@ -12,7 +12,7 @@ app = FastAPI()
 
 # Only include YOUR router
 app.include_router(twilio.router)
-# app.include_router(deepgram.router) <-- IGNORE AHAD'S ROUTER
+app.include_router(brain.router)
 
 @app.get("/")
 async def health_check():
