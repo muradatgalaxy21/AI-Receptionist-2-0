@@ -37,9 +37,9 @@ async def incoming_call(request: Request):
     
     # DEBUG PRINT: Check what URL we are generating
     ws_url = f"wss://{host}/media-stream"
-    print(f"\n📞 INCOMING CALL DETECTED!")
-    print(f"👇 INSTRUCTION: Telling Twilio to connect to:")
-    print(f"👉 {ws_url}")
+    print(f"\INCOMING CALL DETECTED!")
+    print(f"INSTRUCTION: Telling Twilio to connect to:")
+    print(f"{ws_url}")
     print(f"--------------------------------------------\n")
 
     # 2. The improved XML (Includes PAUSE)

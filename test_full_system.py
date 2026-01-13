@@ -1,69 +1,33 @@
 import asyncio
-import json
 import websockets
-import uvicorn
-from multiprocessing import Process
-import time
 
-# Function to start your actual server in the background
-def start_server():
-    from main import app
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="error")
+# PASTE YOUR KEY HERE
+API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
 
-async def run_test_client():
-    uri = "ws://127.0.0.1:8000/media-stream"
+async def test_header_auth():
+    clean_key = API_KEY.strip()
     
-    print("📞 [Test] Dialing the AI Receptionist...")
-    
+    print(f"Testing with Header Auth...")
+
+    # 1. URL has NO key in it (Safe from stripping)
+    url = "wss://api.deepgram.com/v1/listen?encoding=mulaw&sample_rate=8000&model=nova-2&smart_format=true"
+
+    # 2. Key is inside the Headers (Secure Envelope)
+    headers = {
+        "Authorization": f"Token {clean_key}"
+    }
+
+    print("Attempting connection...")
+
     try:
-        async with websockets.connect(uri) as websocket:
-            print("✅ [Test] Connected to WebSocket!")
-
-            # 1. Send the "Start" event (Twilio does this first)
-            start_event = {
-                "event": "start",
-                "start": {"streamSid": "TEST_CALL_123"}
-            }
-            await websocket.send(json.dumps(start_event))
-            
-            # 2. Simulate sending audio (just silence for testing)
-            # This triggers the "Brain" to process it
-            media_event = {
-                "event": "media",
-                "media": {
-                    "payload": "UklGRi4AAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA="
-                }
-            }
-            await websocket.send(json.dumps(media_event))
-            
-            # 3. Listen for a response
-            print("👂 [Test] Listening for AI response...")
-            try:
-                # Wait 5 seconds for a response
-                response = await asyncio.wait_for(websocket.recv(), timeout=5.0)
-                print(f"🗣️ [Test] AI Responded: {response[:100]}...")
-            except asyncio.TimeoutError:
-                print("⚠️ [Test] No transcript received (Expected for silence). Connection is good!")
-            
-            # 4. Clean up
-            stop_event = {"event": "stop"}
-            await websocket.send(json.dumps(stop_event))
-            print("✅ [Test] Test passed. System is integrated.")
-
+        # 3. Connect using extra_headers
+        async with websockets.connect(url, extra_headers=headers) as ws:
+            print("SUCCESS! Connected to Deepgram using Headers.")
+            print("(The URL-stripping issue is bypassed!)")
+            await ws.close()
     except Exception as e:
-        print(f"❌ [Test] Failed: {e}")
+        print("FAILED.")
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
-    # 1. Start the Server in a separate process
-    server_process = Process(target=start_server)
-    server_process.start()
-    
-    # Give the server 2 seconds to wake up
-    time.sleep(2)
-    
-    # 2. Run the Test Client
-    try:
-        asyncio.run(run_test_client())
-    finally:
-        # 3. Kill the server when done
-        server_process.terminate()
+    asyncio.run(test_header_auth())
