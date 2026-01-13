@@ -2,97 +2,75 @@ import os
 import json
 import base64
 import asyncio
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv())
-# We ONLY import the Client. We do not import LiveOptions.
-from deepgram import DeepgramClient
+import websockets
+from fastapi import APIRouter, WebSocket
 
-load_dotenv()
+# Your working key
+API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
 
-async def process_audio_stream(websocket):
-    """
-    The Brain: Handles the bi-directional audio stream.
-    """
-    print("Twilio connected to the Brain.")
+async def process_audio_stream(websocket: WebSocket):
+    clean_key = API_KEY.strip()
     
-    # Initialize to None for safety in 'finally' block
-    dg_connection = None
+    # 1. Define Headers (The Safe Way)
+    # This hides the key from your router/firewall
+    headers = {
+        "Authorization": f"Token {clean_key}"
+    }
+
+    # 2. Define URL (No Key here)
+    DEEPGRAM_URL = (
+        f"wss://api.deepgram.com/v1/listen"
+        f"?encoding=mulaw"
+        f"&sample_rate=8000"
+        f"&model=nova-2"
+        f"&smart_format=true"
+    )
+
+    print("Connecting to Deepgram (Header Auth)...")
 
     try:
-        # 1. Initialize Deepgram
-        # We leave this empty. It automatically looks for DEEPGRAM_API_KEY in .env
-        deepgram = DeepgramClient()
-        
-        # Create a websocket connection to Deepgram
-        dg_connection = deepgram.listen.asyncwebsocket.v("1")
+        # 3. Connect using extra_headers
+        async with websockets.connect(DEEPGRAM_URL, extra_headers=headers) as dg_socket:
+            print("SUCCESS: Connected to Deepgram!")
+            print("Waiting for you to speak...")
 
-        # --- EVENT HANDLERS ---
+            # --- SENDER: Phone -> Deepgram ---
+            async def send_mic_audio():
+                try:
+                    while True:
+                        message = await websocket.receive_text()
+                        data = json.loads(message)
 
-        # Handle Audio from AI
-        async def on_audio(self, audio_data, **kwargs):
-            encoded_audio = base64.b64encode(audio_data).decode("utf-8")
-            response_message = {
-                "event": "media",
-                "streamSid": stream_sid,
-                "media": {
-                    "payload": encoded_audio
-                }
-            }
-            await websocket.send_text(json.dumps(response_message))
+                        if data['event'] == 'media':
+                            # Send audio payload to Deepgram
+                            audio_bytes = base64.b64decode(data['media']['payload'])
+                            await dg_socket.send(audio_bytes)
+                        
+                        elif data['event'] == 'stop':
+                            print("Call ended.")
+                            await dg_socket.send(b"")
+                            break
+                except Exception as e:
+                    print(f"Error sending audio: {e}")
 
-        dg_connection.on("Audio", on_audio)
+            # --- RECEIVER: Deepgram -> Terminal ---
+            async def get_transcription():
+                try:
+                    while True:
+                        response = await dg_socket.recv()
+                        data = json.loads(response)
 
-        # Handle Transcripts
-        async def on_transcript(self, result, **kwargs):
-            if result.channel and result.channel.alternatives:
-                transcript = result.channel.alternatives[0].transcript
-                if transcript:
-                    print(f"User: {transcript}")
+                        if "channel" in data:
+                            alternatives = data["channel"]["alternatives"]
+                            if alternatives:
+                                transcript = alternatives[0]["transcript"]
+                                if transcript:
+                                    # Print what you say in real-time
+                                    print(f"🗣️ YOU: {transcript}")
+                except Exception as e:
+                    print(f"Error receiving: {e}")
 
-        dg_connection.on("Results", on_transcript)
-
-        # --- CONNECT (The Fix) ---
-        
-        # We use a simple Dictionary instead of the LiveOptions class.
-        # This bypasses the ImportError completely.
-        options_dict = {
-            "model": "nova-2",
-            "encoding": "mulaw",
-            "sample_rate": 8000,
-            "smart_format": True
-        }
-        
-        # Start connection using the dictionary
-        if await dg_connection.start(options_dict) is False:
-            print("Failed to connect to Deepgram")
-            return
-
-        # --- THE LOOP ---
-        stream_sid = None
-
-        while True:
-            # Receive from Twilio
-            message = await websocket.receive_text()
-            data = json.loads(message)
-
-            if data['event'] == 'start':
-                stream_sid = data['start']['streamSid']
-                print(f"Call started. ID: {stream_sid}")
-
-            elif data['event'] == 'media':
-                # Decode Base64 -> Raw Bytes
-                audio_payload = base64.b64decode(data['media']['payload'])
-                # Send to Deepgram
-                await dg_connection.send(audio_payload)
-
-            elif data['event'] == 'stop':
-                print("Call ended.")
-                break
+            await asyncio.gather(send_mic_audio(), get_transcription())
 
     except Exception as e:
-        print(f"Error in Brain Logic: {e}")
-    finally:
-        # Only finish if the connection was actually created
-        if dg_connection:
-            await dg_connection.finish()
-
+        print(f"Connection Error: {e}")
