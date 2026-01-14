@@ -91,13 +91,14 @@ load_dotenv()
 # ==========================================
 # CONFIGURATION
 # ==========================================
-# Now we get the key from the environment
+# Now we get the key from the environment instead of hardcoding it
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
-# URL ]
+# URL that works for your account
 AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 
 async def process_audio_stream(websocket: WebSocket):
+    # Safety Check: Stop if key is missing
     if not DEEPGRAM_API_KEY:
         print("Error: DEEPGRAM_API_KEY is missing from .env file")
         return
