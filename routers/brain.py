@@ -81,28 +81,40 @@ import json
 import base64
 import asyncio
 import websockets
+import os
 from fastapi import WebSocket
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 # ==========================================
 # CONFIGURATION
 # ==========================================
-DEEPGRAM_API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
+# Now we get the key from the environment instead of hardcoding it
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+
+# URL that works for your account
 AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 
 async def process_audio_stream(websocket: WebSocket):
-    clean_key = DEEPGRAM_API_KEY.strip()
-    headers = { "Authorization": f"Token {clean_key}" }
+    # Safety Check: Stop if key is missing
+    if not DEEPGRAM_API_KEY:
+        print("Error: DEEPGRAM_API_KEY is missing from .env file")
+        return
+
+    headers = { "Authorization": f"Token {DEEPGRAM_API_KEY}" }
 
     # 1. LOAD CONFIG
     try:
         with open("data/config.json", "r") as f:
             agent_config = json.load(f)
-        print("Config loaded.")
+        print("Config loaded from data/config.json")
     except Exception as e:
         print(f"Config Error: {e}")
         return
 
-    # Variable to track the specific call ID (Required for Audio Output)
+    # Variable to track the specific call ID
     stream_sid = None
 
     print(f"Connecting to: {AGENT_URL}")
@@ -122,7 +134,6 @@ async def process_audio_stream(websocket: WebSocket):
                         message = await websocket.receive_text()
                         data = json.loads(message)
                         
-                        # CAPTURE THE STREAM SID (Crucial step)
                         if data['event'] == 'start':
                             stream_sid = data['start']['streamSid']
                             print(f"Call Started. Stream SID: {stream_sid}")
@@ -143,18 +154,16 @@ async def process_audio_stream(websocket: WebSocket):
                         response = await dg_agent.recv()
                         
                         if isinstance(response, bytes):
-                            # AUDIO: Only send if we have the Stream SID
                             if stream_sid:
                                 media_message = {
                                     "event": "media",
-                                    "streamSid": stream_sid,  # <--- THIS WAS MISSING
+                                    "streamSid": stream_sid,
                                     "media": {
                                         "payload": base64.b64encode(response).decode("utf-8")
                                     }
                                 }
                                 await websocket.send_text(json.dumps(media_message))
                         else:
-                            # TEXT LOGS
                             msg = json.loads(response)
                             if msg.get("type") == "ConversationText":
                                 print(f"Sarah: {msg.get('content')}")
