@@ -84,45 +84,64 @@ import json
 import base64
 import asyncio
 import websockets
+import os
 from fastapi import WebSocket
+from dotenv import load_dotenv
 
-DEEPGRAM_API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
+# Load environment variables from the .env file
+load_dotenv()
+
+# Now we get the key from the environment
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
 # AGENT URL
 AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 
 async def process_audio_stream(websocket: WebSocket):
-    clean_key = DEEPGRAM_API_KEY.strip()
-    headers = { "Authorization": f"Token {clean_key}" }
+    if not DEEPGRAM_API_KEY:
+        print("Error: DEEPGRAM_API_KEY is missing from .env file")
+        return
+
+    headers = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
 
     # 1. LOAD CONFIG
     try:
         with open("data/config.json", "r") as f:
             agent_config = json.load(f)
-        print("Config loaded.")
+        print("Config loaded from data/config.json")
     except Exception as e:
         print(f"Config Error: {e}")
         return
+
+    # Variable to track the specific call ID
+    stream_sid = None
 
     print(f"Connecting to: {AGENT_URL}")
 
     try:
         async with websockets.connect(AGENT_URL, extra_headers=headers) as dg_agent:
-            
+
             # 2. SEND CONFIG
             await dg_agent.send(json.dumps(agent_config))
             print("CONNECTION SUCCESS! Sarah is listening...")
 
             # --- SENDER ---
             async def send_mic_audio():
+                nonlocal stream_sid
                 try:
                     while True:
                         message = await websocket.receive_text()
                         data = json.loads(message)
-                        if data['event'] == 'media':
-                            audio_bytes = base64.b64decode(data['media']['payload'])
+
+                        if data["event"] == "start":
+                            stream_sid = data["start"]["streamSid"]
+                            print(f"Call Started. Stream SID: {stream_sid}")
+
+                        elif data["event"] == "media":
+                            audio_bytes = base64.b64decode(data["media"]["payload"])
                             await dg_agent.send(audio_bytes)
-                        elif data['event'] == 'stop':
+
+                        elif data["event"] == "stop":
                             break
                 except Exception:
                     pass
@@ -132,26 +151,27 @@ async def process_audio_stream(websocket: WebSocket):
                 try:
                     while True:
                         response = await dg_agent.recv()
-                        
+
                         if isinstance(response, bytes):
-                            # AUDIO
-                            media_message = {
-                                "event": "media",
-                                "media": {
-                                    "payload": base64.b64encode(response).decode("utf-8")
+                            if stream_sid:
+                                media_message = {
+                                    "event": "media",
+                                    "streamSid": stream_sid,
+                                    "media": {
+                                        "payload": base64.b64encode(response).decode("utf-8")
+                                    }
                                 }
-                            }
-                            await websocket.send_text(json.dumps(media_message))
+                                await websocket.send_text(json.dumps(media_message))
                         else:
-                            # TEXT
                             msg = json.loads(response)
+
                             if msg.get("type") == "ConversationText":
                                 print(f"Sarah: {msg.get('content')}")
                             elif msg.get("type") == "UserStartedSpeaking":
                                 print("USER: Speaking...")
                             elif msg.get("type") == "Error":
                                 print(f"DEEPGRAM ERROR: {msg}")
-                            
+
                 except Exception as e:
                     print(f"Agent Connection Closed: {e}")
 
