@@ -1,148 +1,172 @@
-import os
+# import os
+# import json
+# import base64
+# import asyncio
+# import websockets
+# from fastapi import APIRouter, WebSocket
+
+# # Your working key
+# API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
+
+# async def process_audio_stream(websocket: WebSocket):
+#     clean_key = API_KEY.strip()
+    
+#     # 1. Define Headers (The Safe Way)
+#     # This hides the key from your router/firewall
+#     headers = {
+#         "Authorization": f"Token {clean_key}"
+#     }
+
+#     # 2. Define URL (No Key here)
+#     DEEPGRAM_URL = (
+#         f"wss://api.deepgram.com/v1/listen"
+#         f"?encoding=mulaw"
+#         f"&sample_rate=8000"
+#         f"&model=nova-2"
+#         f"&smart_format=true"
+#     )
+
+#     print("Connecting to Deepgram (Header Auth)...")
+
+#     try:
+#         # 3. Connect using extra_headers
+#         async with websockets.connect(DEEPGRAM_URL, extra_headers=headers) as dg_socket:
+#             print("SUCCESS: Connected to Deepgram!")
+#             print("Waiting for you to speak...")
+
+#             # --- SENDER: Phone -> Deepgram ---
+#             async def send_mic_audio():
+#                 try:
+#                     while True:
+#                         message = await websocket.receive_text()
+#                         data = json.loads(message)
+
+#                         if data['event'] == 'media':
+#                             # Send audio payload to Deepgram
+#                             audio_bytes = base64.b64decode(data['media']['payload'])
+#                             await dg_socket.send(audio_bytes)
+                        
+#                         elif data['event'] == 'stop':
+#                             print("Call ended.")
+#                             await dg_socket.send(b"")
+#                             break
+#                 except Exception as e:
+#                     print(f"Error sending audio: {e}")
+
+#             # --- RECEIVER: Deepgram -> Terminal ---
+#             async def get_transcription():
+#                 try:
+#                     while True:
+#                         response = await dg_socket.recv()
+#                         data = json.loads(response)
+
+#                         if "channel" in data:
+#                             alternatives = data["channel"]["alternatives"]
+#                             if alternatives:
+#                                 transcript = alternatives[0]["transcript"]
+#                                 if transcript:
+#                                     # Print what you say in real-time
+#                                     print(f"🗣️ YOU: {transcript}")
+#                 except Exception as e:
+#                     print(f"Error receiving: {e}")
+
+#             await asyncio.gather(send_mic_audio(), get_transcription())
+
+#     except Exception as e:
+#         print(f"Connection Error: {e}")
+
+
+
 import json
 import base64
 import asyncio
 import websockets
 from fastapi import WebSocket
-from dotenv import load_dotenv
 
-# Load API Key
-load_dotenv(r"E:\AI_and_Beyond\AI-Receptionist\ai-receptionist\.env")
-API_KEY = os.getenv("DEEPGRAM_API_KEY")
+# ==========================================
+# CONFIGURATION
+# ==========================================
+DEEPGRAM_API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
+AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 
-async def process_audio_stream(twilio_ws: WebSocket):
-    # 1. Load User Configuration
+async def process_audio_stream(websocket: WebSocket):
+    clean_key = DEEPGRAM_API_KEY.strip()
+    headers = { "Authorization": f"Token {clean_key}" }
+
+    # 1. LOAD CONFIG
     try:
-        with open(r'E:\AI_and_Beyond\AI-Receptionist\ai-receptionist\config.json') as f:
-            config_data = json.load(f)
-    except FileNotFoundError:
-        print("Error: config.json not found.")
+        with open("data/config.json", "r") as f:
+            agent_config = json.load(f)
+        print("Config loaded.")
+    except Exception as e:
+        print(f"Config Error: {e}")
         return
 
-    # 2. Setup Queues
-    audio_queue = asyncio.Queue()
-    streamsid_queue = asyncio.Queue()
+    # Variable to track the specific call ID (Required for Audio Output)
+    stream_sid = None
 
-    # 3. Connect to Deepgram
-    DEEPGRAM_URL = "wss://agent.deepgram.com/v1/agent/converse"
-    
-    if not API_KEY:
-        print("Error: DEEPGRAM_API_KEY is missing.")
-        return
+    print(f"Connecting to: {AGENT_URL}")
 
     try:
-        # KeepAlive settings prevent random disconnects
-        async with websockets.connect(
-            DEEPGRAM_URL, 
-            subprotocols=["token", API_KEY],
-            ping_interval=5, 
-            ping_timeout=20
-        ) as deepgram_ws:
+        async with websockets.connect(AGENT_URL, extra_headers=headers) as dg_agent:
             
-            print("Connected to Deepgram Voice Agent")
+            # 2. SEND CONFIG
+            await dg_agent.send(json.dumps(agent_config))
+            print("CONNECTION SUCCESS! Sarah is listening...")
 
-            # 4. Handshake (Simple & Clean)
-            # We do NOT manually inject 'barge_in'. We trust your config.json + defaults.
-            settings_payload = {
-                "type": "Settings",
-                "audio": {
-                    "input": {
-                        "encoding": "mulaw",
-                        "sample_rate": 8000
-                    },
-                    "output": {
-                        "encoding": "mulaw",
-                        "sample_rate": 8000,
-                        "container": "none"
-                    }
-                },
-                "agent": config_data.get("agent")
-            }
-            
-            await deepgram_ws.send(json.dumps(settings_payload))
-
-            # --- TASK 1: Twilio Receiver (Input) ---
-            async def twilio_receiver():
-                print("Started Twilio Receiver")
+            # --- SENDER (Phone -> AI) ---
+            async def send_mic_audio():
+                nonlocal stream_sid
                 try:
                     while True:
-                        message = await twilio_ws.receive_text()
+                        message = await websocket.receive_text()
                         data = json.loads(message)
-
+                        
+                        # CAPTURE THE STREAM SID (Crucial step)
                         if data['event'] == 'start':
-                            sid = data['start']['streamSid']
-                            print(f"Call Started: {sid}")
-                            streamsid_queue.put_nowait(sid)
+                            stream_sid = data['start']['streamSid']
+                            print(f"Call Started. Stream SID: {stream_sid}")
                         
                         elif data['event'] == 'media':
-                            media = data['media']
-                            
-                            # CRITICAL FIX: The "Filter"
-                            # We ONLY send audio when the HUMAN speaks ('inbound').
-                            # We IGNORE audio when the AI speaks ('outbound').
-                            if media['track'] == 'inbound':
-                                chunk = base64.b64decode(media['payload'])
-                                audio_queue.put_nowait(chunk)
+                            audio_bytes = base64.b64decode(data['media']['payload'])
+                            await dg_agent.send(audio_bytes)
                         
                         elif data['event'] == 'stop':
-                            print("Call Ended.")
                             break
-
-                except Exception as e:
-                    print(f"Twilio Receiver Error: {e}")
-
-            # --- TASK 2: Deepgram Sender (Uplink) ---
-            async def deepgram_sender():
-                print("Started Deepgram Sender")
-                try:
-                    while True:
-                        chunk = await audio_queue.get()
-                        await deepgram_ws.send(chunk)
-                except Exception as e:
+                except Exception:
                     pass
 
-            # --- TASK 3: Deepgram Receiver (Downlink) ---
-            async def deepgram_receiver():
-                print("Started Deepgram Receiver")
-                streamsid = await streamsid_queue.get()
-                
+            # --- RECEIVER (AI -> Phone) ---
+            async def receive_agent_audio():
                 try:
-                    async for message in deepgram_ws:
-                        # Case A: Audio Data (Agent Voice)
-                        if isinstance(message, bytes):
-                            audio_b64 = base64.b64encode(message).decode("ascii")
-                            media_message = {
-                                "event": "media",
-                                "streamSid": streamsid,
-                                "media": {"payload": audio_b64}
-                            }
-                            await twilio_ws.send_text(json.dumps(media_message))
+                    while True:
+                        response = await dg_agent.recv()
                         
-                        # Case B: Text Events (Control)
-                        elif isinstance(message, str):
-                            decoded = json.loads(message)
-                            msg_type = decoded.get("type")
-
-                            if msg_type == "UserStartedSpeaking":
-                                # This handles the interruption automatically
-                                clear_msg = { "event": "clear", "streamSid": streamsid }
-                                await twilio_ws.send_text(json.dumps(clear_msg))
+                        if isinstance(response, bytes):
+                            # AUDIO: Only send if we have the Stream SID
+                            if stream_sid:
+                                media_message = {
+                                    "event": "media",
+                                    "streamSid": stream_sid,  # <--- THIS WAS MISSING
+                                    "media": {
+                                        "payload": base64.b64encode(response).decode("utf-8")
+                                    }
+                                }
+                                await websocket.send_text(json.dumps(media_message))
+                        else:
+                            # TEXT LOGS
+                            msg = json.loads(response)
+                            if msg.get("type") == "ConversationText":
+                                print(f"Sarah: {msg.get('content')}")
+                            elif msg.get("type") == "UserStartedSpeaking":
+                                print("USER: Speaking...")
+                            elif msg.get("type") == "Error":
+                                print(f"DEEPGRAM ERROR: {msg}")
                             
-                            elif msg_type == "Welcome":
-                                print("Agent Ready!")
-                                
-                            elif msg_type == "Error":
-                                print(f"Deepgram Error: {decoded}")
-
                 except Exception as e:
-                    print(f"Deepgram Receiver Error: {e}")
+                    print(f"Agent Connection Closed: {e}")
 
-            # Run all tasks
-            await asyncio.gather(
-                twilio_receiver(),
-                deepgram_sender(),
-                deepgram_receiver()
-            )
+            await asyncio.gather(send_mic_audio(), receive_agent_audio())
 
     except Exception as e:
         print(f"Connection Error: {e}")

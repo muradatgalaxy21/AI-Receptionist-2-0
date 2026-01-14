@@ -1,0 +1,36 @@
+{
+  "type": "Settings",
+  "audio": {
+    "input": {
+      "encoding": "mulaw",
+      "sample_rate": 8000
+    },
+    "output": {
+      "encoding": "mulaw",
+      "sample_rate": 8000,
+      "container": "none"
+    }
+  },
+  "agent": {
+    "listen": {
+      "provider": {
+        "type": "deepgram",
+        "model": "nova-2"
+      }
+    },
+    "think": {
+      "provider": {
+        "type": "open_ai",
+        "model": "gpt-4o-mini"
+      },
+      "prompt": "You are Sarah, a helpful dental receptionist for Dr. Farooq's Clinic. Keep answers concise."
+    },
+    "speak": {
+      "provider": {
+        "type": "deepgram",
+        "model": "aura-asteria-en"
+      }
+    },
+    "greeting": "Hello, Dr. Farooq's Dental Clinic. This is Sarah. How can I help you?"
+  }
+}
