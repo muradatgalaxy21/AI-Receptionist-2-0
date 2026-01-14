@@ -77,16 +77,18 @@
 
 
 
+# ==========================================
+# CONFIGURATION
+# ==========================================
 import json
 import base64
 import asyncio
 import websockets
 from fastapi import WebSocket
 
-# ==========================================
-# CONFIGURATION
-# ==========================================
 DEEPGRAM_API_KEY = "4ca1fdbf693e32c4194bdcb0679dcf6d8b21910c"
+
+# AGENT URL
 AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 
 async def process_audio_stream(websocket: WebSocket):
@@ -102,9 +104,6 @@ async def process_audio_stream(websocket: WebSocket):
         print(f"Config Error: {e}")
         return
 
-    # Variable to track the specific call ID (Required for Audio Output)
-    stream_sid = None
-
     print(f"Connecting to: {AGENT_URL}")
 
     try:
@@ -114,47 +113,37 @@ async def process_audio_stream(websocket: WebSocket):
             await dg_agent.send(json.dumps(agent_config))
             print("CONNECTION SUCCESS! Sarah is listening...")
 
-            # --- SENDER (Phone -> AI) ---
+            # --- SENDER ---
             async def send_mic_audio():
-                nonlocal stream_sid
                 try:
                     while True:
                         message = await websocket.receive_text()
                         data = json.loads(message)
-                        
-                        # CAPTURE THE STREAM SID (Crucial step)
-                        if data['event'] == 'start':
-                            stream_sid = data['start']['streamSid']
-                            print(f"Call Started. Stream SID: {stream_sid}")
-                        
-                        elif data['event'] == 'media':
+                        if data['event'] == 'media':
                             audio_bytes = base64.b64decode(data['media']['payload'])
                             await dg_agent.send(audio_bytes)
-                        
                         elif data['event'] == 'stop':
                             break
                 except Exception:
                     pass
 
-            # --- RECEIVER (AI -> Phone) ---
+            # --- RECEIVER ---
             async def receive_agent_audio():
                 try:
                     while True:
                         response = await dg_agent.recv()
                         
                         if isinstance(response, bytes):
-                            # AUDIO: Only send if we have the Stream SID
-                            if stream_sid:
-                                media_message = {
-                                    "event": "media",
-                                    "streamSid": stream_sid,  # <--- THIS WAS MISSING
-                                    "media": {
-                                        "payload": base64.b64encode(response).decode("utf-8")
-                                    }
+                            # AUDIO
+                            media_message = {
+                                "event": "media",
+                                "media": {
+                                    "payload": base64.b64encode(response).decode("utf-8")
                                 }
-                                await websocket.send_text(json.dumps(media_message))
+                            }
+                            await websocket.send_text(json.dumps(media_message))
                         else:
-                            # TEXT LOGS
+                            # TEXT
                             msg = json.loads(response)
                             if msg.get("type") == "ConversationText":
                                 print(f"Sarah: {msg.get('content')}")
