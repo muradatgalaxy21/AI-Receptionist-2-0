@@ -17,14 +17,21 @@ def check_availability_tool(time_str):
         
     return True
 
-def book_appointment_tool(name, phone, time_str):
-    """
-    Saves to both Local DB and Google Calendar.
-    """
-    # 1. Save locally
-    db_success = database.book_appointment(name, phone, time_str)
-    
-    # 2. Sync to Cloud
-    cal_success = calendar.add_google_event(name, time_str)
-    
-    return db_success and cal_success
+def book_appointment(first_name, last_name, reason, date, time):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            INSERT INTO appointments 
+            (first_name, last_name, reason, appointment_date, appointment_time)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (first_name, last_name, reason, date, time))
+        conn.commit()
+        print("Appointment booked successfully")
+        return True
+    except Exception as e:
+        print(f"DB Error: {e}")
+        return False
+    finally:
+        conn.close()

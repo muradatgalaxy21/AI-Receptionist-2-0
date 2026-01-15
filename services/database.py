@@ -16,9 +16,11 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_name TEXT,
-            phone_number TEXT,
-            appointment_time DATETIME,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            appointment_date TEXT NOT NULL,
+            appointment_time TEXT NOT NULL,
             status TEXT DEFAULT 'confirmed'
         )
     ''')
