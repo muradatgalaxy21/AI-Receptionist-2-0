@@ -105,6 +105,19 @@ async def process_audio_stream(websocket: WebSocket):
         "appointment_time": None,
         "reason": None
     }
+    FIELD_ORDER = [
+        "first_name",
+        "last_name",
+        "appointment_date",
+        "appointment_time",
+        "reason"
+    ]
+
+    def get_next_missing_field(state):
+        for field in FIELD_ORDER:
+            if not state[field]:
+                return field
+        return None
 
     # Safety Check: Stop if key is missing
     if not DEEPGRAM_API_KEY:
@@ -155,13 +168,27 @@ async def process_audio_stream(websocket: WebSocket):
                 except Exception:
                     pass
 
+            import time
+
             # --- RECEIVER (AI -> Phone) ---
             async def receive_agent_audio():
+                nonlocal stream_sid
+                last_user_start_time = time.time()
+                first_byte_received = False
                 try:
                     while True:
                         response = await dg_agent.recv()
                         
                         if isinstance(response, bytes):
+                            if not first_byte_received:
+                                latency = time.time() - last_user_start_time
+                                print(f"Latancy detected: {latency:.2f}s")
+                                
+                                # Add artificial delay
+                                print("Waiting 1 second before speaking...")
+                                await asyncio.sleep(1.0)
+                                first_byte_received = True
+
                             if stream_sid:
                                 media_message = {
                                     "event": "media",
@@ -180,8 +207,21 @@ async def process_audio_stream(websocket: WebSocket):
                                     payload = json.loads(content)
 
                                     if payload["type"] == "field_update":
-                                        conversation_state[payload["field"]] = payload["value"]
-                                        print(f"[STATE] {payload['field']} = {payload['value']}")
+                                        field = payload["field"]
+                                        value = payload["value"]
+
+                                        conversation_state[field] = value
+                                        print(f"[STATE] {field} = {value}")
+
+                                        # Find what to ask next
+                                        next_field = get_next_missing_field(conversation_state)
+
+                                        if next_field:
+                                            # Tell agent to continue
+                                            await dg_agent.send(json.dumps({
+                                                "type": "assistant",
+                                                "content": f"Please ask the user for their {next_field.replace('_', ' ')}."
+                                            }))
 
                                     elif payload["type"] == "ready_to_book":
                                         if all(conversation_state.values()):
@@ -195,14 +235,14 @@ async def process_audio_stream(websocket: WebSocket):
                                                 conversation_state["appointment_time"]
                                             )
 
-                                            print("APPOINTMENT CONFIRMED")
-
                                 except json.JSONDecodeError:
                                     # Normal speech output
                                     print(f"Sarah: {content}")
 
                             elif msg.get("type") == "UserStartedSpeaking":
                                 print("USER: Speaking...")
+                                last_user_start_time = time.time()
+                                first_byte_received = False
                             elif msg.get("type") == "Error":
                                 print(f"DEEPGRAM ERROR: {msg}")
                             
