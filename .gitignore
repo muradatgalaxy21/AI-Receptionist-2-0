@@ -10,4 +10,3 @@ __pycache__/
 *.db
 *.sqlite3
 appointments.db
-check_API_KEY.py
