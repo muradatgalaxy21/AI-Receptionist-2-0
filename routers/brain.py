@@ -100,11 +100,24 @@ AGENT_URL = "wss://agent.deepgram.com/v1/agent/converse"
 async def process_audio_stream(websocket: WebSocket):
     conversation_state = {
         "first_name": None,
-        "last_name": None,
+        "last_name":  None,
         "appointment_date": None,
         "appointment_time": None,
         "reason": None
     }
+    FIELD_ORDER = [
+        "first_name",
+        "last_name",
+        "appointment_date",
+        "appointment_time",
+        "reason"
+    ]
+
+    def get_next_missing_field(state):
+        for field in FIELD_ORDER:
+            if not state[field]:
+                return field
+        return None
 
     # Safety Check: Stop if key is missing
     if not DEEPGRAM_API_KEY:
@@ -155,13 +168,27 @@ async def process_audio_stream(websocket: WebSocket):
                 except Exception:
                     pass
 
+            import time
+
             # --- RECEIVER (AI -> Phone) ---
             async def receive_agent_audio():
+                nonlocal stream_sid
+                last_user_start_time = time.time()
+                first_byte_received = False
                 try:
                     while True:
                         response = await dg_agent.recv()
                         
                         if isinstance(response, bytes):
+                            if not first_byte_received:
+                                latency = time.time() - last_user_start_time
+                                print(f"Latancy detected: {latency:.2f}s")
+                                
+                                # Add artificial delay
+                                print("Waiting 1 second before speaking...")
+                                await asyncio.sleep(1.0)
+                                first_byte_received = True
+
                             if stream_sid:
                                 media_message = {
                                     "event": "media",
@@ -180,22 +207,44 @@ async def process_audio_stream(websocket: WebSocket):
                                     payload = json.loads(content)
 
                                     if payload["type"] == "field_update":
-                                        conversation_state[payload["field"]] = payload["value"]
-                                        print(f"[STATE] {payload['field']} = {payload['value']}")
+                                        field = payload["field"]
+                                        value = payload["value"]
+
+                                        conversation_state[field] = value
+                                        print(f"[STATE] {field} = {value}")
+
+                                        # Find what to ask next
+                                        next_field = get_next_missing_field(conversation_state)
+
+                                        if next_field:
+                                            # Tell agent to continue
+                                            await dg_agent.send(json.dumps({
+                                                "type": "assistant",
+                                                "content": f"Please ask the user for their {next_field.replace('_', ' ')}."
+                                            }))
 
                                     elif payload["type"] == "ready_to_book":
+                                        print("In ready to book elif statement!")
+                                        print("\n\n\n")
+                                        print(conversation_state["first_name"])
+                                        print(conversation_state["last_name"])
+                                        print(conversation_state["appointment_date"])
+                                        print(conversation_state["appointment_time"])
+                                        print(conversation_state["reason"])
+                                        print("\n\n\n")
+                                        print("Values in state list are completed: ", all(conversation_state.values()))
                                         if all(conversation_state.values()):
+                                            print("In all conversation state.value statement!")
                                             from services.database import book_appointment
-
+                                            print("imported book_appointment function!")
                                             book_appointment(
                                                 conversation_state["first_name"],
                                                 conversation_state["last_name"],
-                                                conversation_state["reason"],
                                                 conversation_state["appointment_date"],
-                                                conversation_state["appointment_time"]
+                                                conversation_state["appointment_time"],
+                                                conversation_state["reason"],
                                             )
-
-                                            print("APPOINTMENT CONFIRMED")
+                                            print("booked appointment!")
 
                                 except json.JSONDecodeError:
                                     # Normal speech output
@@ -203,6 +252,8 @@ async def process_audio_stream(websocket: WebSocket):
 
                             elif msg.get("type") == "UserStartedSpeaking":
                                 print("USER: Speaking...")
+                                last_user_start_time = time.time()
+                                first_byte_received = False
                             elif msg.get("type") == "Error":
                                 print(f"DEEPGRAM ERROR: {msg}")
                             
