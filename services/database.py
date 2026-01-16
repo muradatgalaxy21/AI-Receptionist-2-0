@@ -4,8 +4,11 @@
 
 import sqlite3
 from datetime import datetime
+import os
 
-DB_NAME = "appointments.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(BASE_DIR, "appointments.db")
+
 
 def init_db():
     """
@@ -16,9 +19,11 @@ def init_db():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_name TEXT,
-            phone_number TEXT,
-            appointment_time DATETIME,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            appointment_date TEXT NOT NULL,
+            appointment_time TEXT NOT NULL,
             status TEXT DEFAULT 'confirmed'
         )
     ''')
@@ -46,6 +51,7 @@ def is_slot_available(time_str):
     # If count is 0, the slot is free
     return count == 0
 
+print("book_appointment() CALLED")
 def book_appointment(name, phone, time_str):
     """
     Saves the appointment to the database.
@@ -66,6 +72,9 @@ def book_appointment(name, phone, time_str):
         return False
     finally:
         conn.close()
+
+# import os
+# print("DB PATH:", os.path.abspath(DB_NAME))
 
 # Initialize the DB immediately when this file is imported
 init_db()
