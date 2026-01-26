@@ -1,36 +1,46 @@
 {
   "type": "Settings",
   "audio": {
-    "input": {
-      "encoding": "mulaw",
-      "sample_rate": 8000
-    },
-    "output": {
-      "encoding": "mulaw",
-      "sample_rate": 8000,
-      "container": "none"
-    }
+    "input": { "encoding": "mulaw", "sample_rate": 8000 },
+    "output": { "encoding": "mulaw", "sample_rate": 8000, "container": "none" }
   },
   "agent": {
     "listen": {
-      "provider": {
-        "type": "deepgram",
-        "model": "nova-2"
-      }
+      "provider": { "type": "deepgram", "model": "nova-2", "endpointing": 300 }
     },
     "think": {
-      "provider": {
-        "type": "open_ai",
-        "model": "gpt-4o-mini"
-      },
-      "prompt": "You are Sarah, a professional dental receptionist.\\n\\nYour ONLY task is to book appointments.\\n\\nRULES:\\n1. Collect these fields strictly one by one:\\n- first_name\\n- last_name\\n- appointment_date\\n- appointment_time\\n- reason\\n\\n2. Ask ONLY ONE question at a time.\\n\\n3. If the reason is vague (pain, discomfort, swelling), ask follow-up questions until it is medically clear.\\n\\n4. After extracting a field, respond ONLY with valid JSON in this exact format:\\n{\\n  \\\"type\\\": \\\"field_update\\\",\\n  \\\"field\\\": \\\"<field_name>\\\",\\n  \\\"value\\\": \\\"<value>\\\"\\n}\\n\\n When responding with JSON, treat it as INTERNAL CONTROL DATA and DO NOT speak or read it aloud to the user. 5. When ALL fields are collected, respond ONLY with:\\n{\\n  \\\"type\\\": \\\"ready_to_book\\\"\\n}\\n\\nDo NOT guess dates or times. Do NOT skip questions. Do NOT book automatically. After acknowledging a field_update internally, you MUST immediately ask the next required question without waiting."
+      "provider": { "type": "open_ai", "model": "gpt-4o-mini" },
+      "prompt": "You are Sarah, a receptionist. \n\nRULES:\n1. If you hear a Date/Time, CALL 'check_availability'.\n2. IMPORTANT: Pass dates exactly as spoken (e.g. 'tomorrow', 'next tuesday'). Do NOT calculate dates.\n3. CALL 'book_appointment_tool' when you have Name, Reason, Date, and Time.\n4. If the user gives a single name like 'Ahad', pass it. Do not ask for a last name.\n5. Keep answers short.",
+      "functions": [
+        {
+          "name": "check_availability",
+          "description": "Check availability.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "date": { "type": "string", "description": "Spoken date (e.g. 'tomorrow')" },
+              "time": { "type": "string", "description": "Spoken time (e.g. '6 PM')" }
+            },
+            "required": ["date"]
+          }
+        },
+        {
+          "name": "book_appointment_tool",
+          "description": "Book appointment.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "User's name" },
+              "reason": { "type": "string" },
+              "date": { "type": "string", "description": "Spoken date" },
+              "time": { "type": "string" }
+            },
+            "required": ["name", "reason", "date", "time"]
+          }
+        }
+      ]
     },
-    "speak": {
-      "provider": {
-        "type": "deepgram",
-        "model": "aura-asteria-en"
-      }
-    },
-    "greeting": "Hello, Doctor Farooq  Dental Clinic. This is Sarah. How may I assist you today?"
+    "speak": { "provider": { "type": "deepgram", "model": "aura-asteria-en" } },
+    "greeting": "Hello, Dr. Farooq's Dental Clinic. This is Sarah."
   }
 }
