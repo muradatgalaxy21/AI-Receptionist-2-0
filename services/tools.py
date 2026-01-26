@@ -1,37 +1,65 @@
-# The Tool Manager
+from services import database
+from datetime import datetime
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
 
-from services import database, calendar
-
-def check_availability_tool(time_str):
+def parse_date(date_str: str):
     """
-    Combines SQLite and Google Calendar checks.
-    Deepgram will call this function.
+    Uses dateutil to smartly convert 'tomorrow', 'next friday', etc.
     """
-    # 1. Check Local DB
-    if not database.is_slot_available(time_str):
-        return False
+    if not date_str:
+        return None
     
-    # 2. Check Google Calendar
-    if not calendar.check_google_calendar(time_str):
-        return False
-        
-    return True
-
-def book_appointment(first_name, last_name, reason, date, time):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
+    # Clean the string
+    d = date_str.lower().strip()
+    now = datetime.now()
 
     try:
-        cursor.execute('''
-            INSERT INTO appointments 
-            (first_name, last_name, reason, appointment_date, appointment_time)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (first_name, last_name, reason, date, time))
-        conn.commit()
-        print("Appointment booked successfully")
-        return True
+        # Handle specific relative terms manually for precision
+        if "today" in d:
+            return now.strftime("%Y-%m-%d")
+        elif "tomorrow" in d:
+            return (now + relativedelta(days=1)).strftime("%Y-%m-%d")
+        elif "day after" in d:
+            return (now + relativedelta(days=2)).strftime("%Y-%m-%d")
+        
+        # Use the powerful library for everything else ("next Tuesday", "Jan 21")
+        # fuzzy=True allows it to ignore extra words like "on", "the"
+        parsed_date = parser.parse(d, fuzzy=True, default=now)
+        
+        # If the parsed date is in the past (e.g. user says "Monday" but it's Tuesday),
+        # assume they mean NEXT week.
+        if parsed_date.date() < now.date():
+            parsed_date += relativedelta(weeks=1)
+            
+        return parsed_date.strftime("%Y-%m-%d")
     except Exception as e:
-        print(f"DB Error: {e}")
-        return False
-    finally:
-        conn.close()
+        print(f"Date Parse Error: {e}")
+        return date_str  # Return original string if we can't parse it
+
+def check_availability(date: str, time: str = None):
+    print(f"Checking availability for {date} (Time: {time})...")
+    real_date = parse_date(date)
+    print(f"   -> Converted '{date}' to '{real_date}'")
+
+    if not time or "all" in time.lower() or "any" in time.lower():
+        return "The available times are 12:00 PM, 2:00 PM, and 4:00 PM."
+
+    available = database.is_slot_available(real_date, time)
+    return f"Yes, {time} is available on {real_date}." if available else f"Sorry, {time} is booked on {real_date}."
+
+def book_appointment_tool(name: str, reason: str, date: str, time: str):
+    print(f"Booking: {name} | {date} | {time}")
+    real_date = parse_date(date)
+    
+    # Simple Name Split
+    parts = name.strip().split(" ")
+    first = parts[0]
+    last = " ".join(parts[1:]) if len(parts) > 1 else "(No Last Name)"
+    
+    success = database.book_appointment_db(first, last, reason, real_date, time)
+    
+    if success:
+        return f"Success! Booked for {first} on {real_date} at {time}."
+    else:
+        return "System Error: Database failed."

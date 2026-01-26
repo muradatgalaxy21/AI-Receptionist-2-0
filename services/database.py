@@ -1,7 +1,3 @@
-# Run this command in terminal to create database at your end
-# NEVER push DB on git
-# python services/database.py
-
 import sqlite3
 from datetime import datetime
 import os
@@ -14,11 +10,9 @@ DB_NAME = os.path.join(BASE_DIR, "appointments.db")
 
 
 def init_db():
-    """
-    Creates the database table if it doesn't exist.
-    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    # Correct Schema
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,24 +28,16 @@ def init_db():
     conn.close()
     print("Database initialized.")
 
-def is_slot_available(time_str):
-    """
-    Checks if a specific time slot is free.
-    Format: 'YYYY-MM-DD HH:MM'
-    """
+def is_slot_available(date, time):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
-    # Check if any appointment exists at this exact time
+    # Check if a slot is taken on a specific DATE and TIME
     cursor.execute('''
         SELECT count(*) FROM appointments 
-        WHERE appointment_time = ? AND status = 'confirmed'
-    ''', (time_str,))
-    
+        WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'
+    ''', (date, time))
     count = cursor.fetchone()[0]
     conn.close()
-    
-    # If count is 0, the slot is free
     return count == 0
 
 def book_appointment(first_name, last_name, appointment_date, appointment_time, reason):
@@ -61,8 +47,8 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
     try:
+        # Fixed: Now uses the correct column names matching init_db
         cursor.execute('''
             INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason)
             VALUES (?, ?, ?, ?, ?)
