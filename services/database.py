@@ -62,9 +62,27 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
     finally:
         conn.close()
 
-# import os
-# print("DB PATH:", os.path.abspath(DB_NAME))
+
+def get_available_slots(date):
+    """
+    Returns a list of available times for a given date.
+    Standard slots: 10:00 AM, 12:00 PM, 2:00 PM, 4:00 PM
+    """
+    standard_slots = ["10:00 AM", "11:00 AM", "12:00 PM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM", "08:00 PM"]
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT appointment_time FROM appointments 
+        WHERE appointment_date = ? AND status = 'confirmed'
+    ''', (date,))
+    booked_slots = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    
+    # Normalize booked slots to compare easily (stripping logic if needed, but assuming exact match for now)
+    available = [slot for slot in standard_slots if slot not in booked_slots]
+    return available
 
 # Initialize the DB immediately when this file is imported
-# init_db()
+init_db()
     

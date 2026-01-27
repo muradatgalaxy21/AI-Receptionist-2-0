@@ -46,7 +46,13 @@ def check_availability(date: str, time: str = None):
         return "The available times are 12:00 PM, 2:00 PM, and 4:00 PM."
 
     available = database.is_slot_available(real_date, time)
-    return f"Yes, {time} is available on {real_date}." if available else f"Sorry, {time} is booked on {real_date}."
+    return available
+
+def get_available_slots_tool(date: str):
+    real_date = parse_date(date)
+    return database.get_available_slots(real_date)
+
+
 
 def book_appointment_tool(name: str, reason: str, date: str, time: str):
     print(f"Booking: {name} | {date} | {time}")
@@ -57,7 +63,7 @@ def book_appointment_tool(name: str, reason: str, date: str, time: str):
     first = parts[0]
     last = " ".join(parts[1:]) if len(parts) > 1 else "(No Last Name)"
     
-    success = database.book_appointment_db(first, last, reason, real_date, time)
+    success = database.book_appointment(first, last, real_date, time, reason)
     
     if success:
         return f"Success! Booked for {first} on {real_date} at {time}."

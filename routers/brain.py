@@ -4,10 +4,12 @@ import base64
 import asyncio
 import websockets
 import os
-import re  # <--- NEW: Import Regex
+import re
+from datetime import datetime
 from fastapi import WebSocket
 from dotenv import load_dotenv
 from services.database import book_appointment
+from services.tools import check_availability, parse_date, get_available_slots_tool
 
 load_dotenv()
 
@@ -33,6 +35,11 @@ async def process_audio_stream(websocket: WebSocket):
     try:
         with open("data/config.json", "r") as f:
             agent_config = json.load(f)
+
+        # INJECT CURRENT DATE & TIME
+        current_time = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
+        agent_config["agent"]["think"]["prompt"] += f"\n\nCONTEXT: Today is {current_time}."
+        print(f"Injecting time into prompt: {current_time}")
     except Exception as e:
         print(f"Config Error: {e}")
         return
@@ -118,20 +125,62 @@ async def process_audio_stream(websocket: WebSocket):
                                     if payload.get("type") == "ready_to_book":
                                         print("[EVENT] Ready to book signal received.")
                                         
-                                        # Now check if we have the data (from text or hidden signal)
                                         if all(conversation_state.values()):
-                                            print("--> All fields present. Booking now...")
-                                            success = book_appointment(
-                                                conversation_state["first_name"],
-                                                conversation_state["last_name"],
-                                                conversation_state["appointment_date"],
-                                                conversation_state["appointment_time"],
-                                                conversation_state["reason"]
-                                            )
-                                            if success:
-                                                print("✅ APPOINTMENT BOOKED!")
-                                                await asyncio.sleep(3) # Let her finish speaking
-                                                break # End call
+                                            # --- CHECK AVAILABILITY ---
+                                            appt_date = conversation_state["appointment_date"]
+                                            appt_time = conversation_state["appointment_time"]
+                                            
+                                            is_available = check_availability(appt_date, appt_time)
+
+                                            if is_available:
+                                                print("--> All fields present & Slot Available. Booking now...")
+                                                # Use parsed date for storage consistency
+                                                real_date = parse_date(appt_date)
+                                                
+                                                success = book_appointment(
+                                                    conversation_state["first_name"],
+                                                    conversation_state["last_name"],
+                                                    real_date,
+                                                    appt_time,
+                                                    conversation_state["reason"]
+                                                )
+                                                if success:
+                                                    print("✅ APPOINTMENT BOOKED!")
+                                                    await asyncio.sleep(3) # Let her finish speaking
+                                                    break # End call
+                                            else:
+                                                print("--> SLOT UNAVAILABLE. Reporting back to Agent...")
+                                                
+                                                # 1. Get Available Slots
+                                                free_slots = get_available_slots_tool(appt_date)
+                                                free_slots_str = ", ".join(free_slots) if free_slots else "No slots available"
+
+                                                # 2. Update Prompt via Settings (Safer than direct text injection)
+                                                # We append the instruction to the CURRENT prompt context
+                                                original_prompt = agent_config["agent"]["think"]["prompt"]
+                                                
+                                                # Remove previous system injections to avoid clutter (optional, but good practice)
+                                                clean_prompt = original_prompt.split("SYSTEM UPDATE:")[0].strip()
+                                                
+                                                new_prompt = clean_prompt + f"\n\nSYSTEM UPDATE: The user requested {appt_date} at {appt_time}, but it is BOOKED. You MUST apologize and offer these available times: {free_slots_str}. Ask which one they prefer."
+                                                
+                                                settings_update = {
+                                                    "type": "Settings",
+                                                    "agent": {
+                                                        "think": {
+                                                            "prompt": new_prompt
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                await dg_agent.send(json.dumps(settings_update))
+                                                print(f"--> Updated Agent Prompt with available slots: {free_slots_str}")
+                                                
+                                                # Reset Date/Time in state so we can collect new ones
+                                                conversation_state["appointment_time"] = None
+                                                # Keep date to avoid re-asking? No, asking "What time?" implies date is same. 
+                                                # But if they want to change date, we might want to clear it?
+                                                # Let's keep date for now, just clear time.
                                         else:
                                             print("--> Missing fields. Cannot book yet.")
                                 except json.JSONDecodeError:
