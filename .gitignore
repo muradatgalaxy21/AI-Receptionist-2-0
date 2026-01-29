@@ -10,3 +10,6 @@ __pycache__/
 *.db
 *.sqlite3
 appointments.db
+database-manage.py
+test_time_format.py
+tests/

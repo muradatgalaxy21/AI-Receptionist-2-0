@@ -2,6 +2,7 @@ from services import database
 from datetime import datetime
 from dateutil import parser
 from dateutil.relativedelta import relativedelta
+import re
 
 def parse_date(date_str: str):
     """
@@ -25,11 +26,16 @@ def parse_date(date_str: str):
         
         # Use the powerful library for everything else ("next Tuesday", "Jan 21")
         # fuzzy=True allows it to ignore extra words like "on", "the"
-        parsed_date = parser.parse(d, fuzzy=True, default=now)
+        # dayfirst=True enforces DMY format (e.g. 01/02 is Feb 1st, not Jan 2nd)
+        parsed_date = parser.parse(d, fuzzy=True, dayfirst=True, default=now)
         
-        # If the parsed date is in the past (e.g. user says "Monday" but it's Tuesday),
-        # assume they mean NEXT week.
-        if parsed_date.date() < now.date():
+        # Check if year was explicitly mentioned (4 digits)
+        # If user said "2026", we shouldn't shift the date even if it looks like past.
+        # Use regex to find 4 digits, since split() + isdigit() fails on "01-02-2026"
+        year_explicitly_mentioned = re.search(r"\d{4}", d) is not None
+
+        # If the parsed date is in the past AND year wasn't specified, assume next week.
+        if parsed_date.date() < now.date() and not year_explicitly_mentioned:
             parsed_date += relativedelta(weeks=1)
             
         return parsed_date.strftime("%Y-%m-%d")

@@ -105,11 +105,16 @@ async def process_audio_stream(websocket: WebSocket):
                                     
                                     # Use Regex to find values after the colons
                                     # This looks for "- Key: Value" patterns
-                                    first_name_match = re.search(r"First Name:\s*(.*)", content)
-                                    last_name_match = re.search(r"Last Name:\s*(.*)", content)
-                                    date_match = re.search(r"Appointment Date:\s*(.*)", content)
-                                    time_match = re.search(r"Appointment Time:\s*(.*)", content)
-                                    reason_match = re.search(r"Reason:\s*(.*)", content)
+                                    print(f"DEBUG: Checking regex matches on content: {content}")
+                                    first_name_match = re.search(r"First Name:\s*(.*?)(?:$|\n|\.|,)", content)
+                                    last_name_match = re.search(r"Last Name:\s*(.*?)(?:$|\n|\.|,)", content)
+                                    # Flexible matching: Handles "Appointment Date" OR just "Date"
+                                    date_match = re.search(r"(?:Appointment )?Date:\s*(.*?)(?:$|\n|\.|,)", content)
+                                    # Flexible matching: Handles "Appointment Time" OR just "Time"
+                                    time_match = re.search(r"(?:Appointment )?Time:\s*(.*?)(?:$|\n|\.|,)", content)
+                                    reason_match = re.search(r"Reason:\s*(.*?)(?:$|\n|\.|,)", content)
+
+                                    print(f"DEBUG: Matches -> Name: {first_name_match}, Date: {date_match}, Time: {time_match}")
 
                                     if first_name_match: conversation_state["first_name"] = first_name_match.group(1).strip()
                                     if last_name_match: conversation_state["last_name"] = last_name_match.group(1).strip()
@@ -118,21 +123,70 @@ async def process_audio_stream(websocket: WebSocket):
                                     if reason_match: conversation_state["reason"] = reason_match.group(1).strip()
 
                                     print(f"--> STATE UPDATED FROM TEXT: {conversation_state}")
+
+                                # --- NEW: EARLY AVAILABILITY CHECK ---
+                                # Check availability immediately when the specific time is confirmed/recorded
+                                if "I will record the appointment time as" in content:
+                                    # We need to make sure we have both date and time
+                                    # Sometimes date comes earlier. State should have it.
+                                    current_date = conversation_state.get("appointment_date")
+                                    # Extract the time specifically from this utterance to be safe, or fallback to state
+                                    # The state text extraction overhead might happen slightly after this line due to order? 
+                                    # Let's rely on regex here for instant precision
+                                    time_match_instant = re.search(r"I will record the appointment time as\s+(.*?)(?:$|\n|\.|,)", content)
+                                    print(f"DEBUG: Instant Time Match: {time_match_instant}")
+                                    current_time = time_match_instant.group(1).strip() if time_match_instant else conversation_state.get("appointment_time")
+                                    
+                                    if current_date and current_time:
+                                        print(f"--> EARLY CHECK DETECTED for {current_date} at {current_time} (State: {conversation_state})")
+                                        is_available_early = check_availability(current_date, current_time)
+                                        print(f"DEBUG: check_availability result: {is_available_early}")
+                                        
+                                        if not is_available_early:
+                                            print(f"DEBUG: Entering Early Warning Block. Current Date: {current_date}, Time: {current_time}")
+                                            print("--> ⚠️ EARLY WARNING: SLOT TAKEN. Interrupting Agent...")
+                                            
+                                            # 1. Get alternatives
+                                            free_slots = get_available_slots_tool(current_date)
+                                            free_slots_str = ", ".join(free_slots) if free_slots else "No slots available"
+                                            
+                                            # 2. INJECT SYSTEM MESSAGE (Forces immediate reaction)
+                                            # We pretend to be a "System" signal telling the agent to correct itself.
+                                            interrupt_message = {
+                                                "type": "ConversationText",
+                                                "role": "user", # Using 'user' role often forces a reply better than system in some protocols, or just use a strong prompt injection
+                                                "content": f"[SYSTEM ALERT]: The time {current_time} on {current_date} is UNAVAILABLE. You must STOP and inform the user that this time is taken. Offer these available times: {free_slots_str}. Ask for a new time."
+                                            }
+                                            await dg_agent.send(json.dumps(interrupt_message))
+                                            
+                                            # 3. Clear the time from state so we don't try to book it later
+                                            conversation_state["appointment_time"] = None
+                                            print("--> State time cleared. Agent notified.")
+                                        else:
+                                            print(f"DEBUG: Early check passed. Slot available: {is_available_early}")
+                                    else:
+                                        print(f"DEBUG: Early check skipped. Missing date or time here. Date: {current_date}, Time: {current_time}")
                                 
                                 # Check for hidden JSON payloads (Keep this just in case)
                                 try:
                                     payload = json.loads(content)
                                     if payload.get("type") == "ready_to_book":
                                         print("[EVENT] Ready to book signal received.")
-                                        
+                                        print("Name: ", conversation_state["first_name"], conversation_state["last_name"])
+                                        print("Date: ", conversation_state["appointment_date"])
+                                        print("Time: ", conversation_state["appointment_time"])
+                                        print("Reason: ", conversation_state["reason"])
+                                        print(f"DEBUG: All conversation state values present: {conversation_state}")
                                         if all(conversation_state.values()):
-                                            # --- CHECK AVAILABILITY ---
+                                            print(f"DEBUG: Entering final booking check. State: {conversation_state}")
+                                            # --- CHECK AVAILABILITY (Final Gate) ---
                                             appt_date = conversation_state["appointment_date"]
                                             appt_time = conversation_state["appointment_time"]
                                             
                                             is_available = check_availability(appt_date, appt_time)
 
                                             if is_available:
+                                                print(f"DEBUG: Final availability check passed ({is_available}). Proceeding.")
                                                 print("--> All fields present & Slot Available. Booking now...")
                                                 # Use parsed date for storage consistency
                                                 real_date = parse_date(appt_date)
@@ -149,39 +203,25 @@ async def process_audio_stream(websocket: WebSocket):
                                                     await asyncio.sleep(3) # Let her finish speaking
                                                     break # End call
                                             else:
-                                                print("--> SLOT UNAVAILABLE. Reporting back to Agent...")
+                                                print(f"DEBUG: Final availability check failed ({is_available}).")
+                                                print("--> SLOT UNAVAILABLE (Final Check). Reporting back...")
+                                                # This fallback should rarely be hit now with early check
+                                                # But if it is, use the same injection strategy
                                                 
-                                                # 1. Get Available Slots
                                                 free_slots = get_available_slots_tool(appt_date)
                                                 free_slots_str = ", ".join(free_slots) if free_slots else "No slots available"
-
-                                                # 2. Update Prompt via Settings (Safer than direct text injection)
-                                                # We append the instruction to the CURRENT prompt context
-                                                original_prompt = agent_config["agent"]["think"]["prompt"]
                                                 
-                                                # Remove previous system injections to avoid clutter (optional, but good practice)
-                                                clean_prompt = original_prompt.split("SYSTEM UPDATE:")[0].strip()
-                                                
-                                                new_prompt = clean_prompt + f"\n\nSYSTEM UPDATE: The user requested {appt_date} at {appt_time}, but it is BOOKED. You MUST apologize and offer these available times: {free_slots_str}. Ask which one they prefer."
-                                                
-                                                settings_update = {
-                                                    "type": "Settings",
-                                                    "agent": {
-                                                        "think": {
-                                                            "prompt": new_prompt
-                                                        }
-                                                    }
+                                                interrupt_message = {
+                                                    "type": "ConversationText",
+                                                    "role": "user",
+                                                    "content": f"[SYSTEM ALERT]: The requested time is UNAVAILABLE. Tell the user it's taken and offer: {free_slots_str}."
                                                 }
-                                                
-                                                await dg_agent.send(json.dumps(settings_update))
-                                                print(f"--> Updated Agent Prompt with available slots: {free_slots_str}")
-                                                
-                                                # Reset Date/Time in state so we can collect new ones
+                                                await dg_agent.send(json.dumps(interrupt_message))
                                                 conversation_state["appointment_time"] = None
-                                                # Keep date to avoid re-asking? No, asking "What time?" implies date is same. 
-                                                # But if they want to change date, we might want to clear it?
-                                                # Let's keep date for now, just clear time.
+                                                print(f"DEBUG: Cleared appointment_time in state due to unavailability (Final Check). New State: {conversation_state}")
+
                                         else:
+                                            print(f"DEBUG: Missing fields in final check. State: {conversation_state}")
                                             print("--> Missing fields. Cannot book yet.")
                                 except json.JSONDecodeError:
                                     pass # Not a JSON hidden message, just normal text

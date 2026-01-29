@@ -2,12 +2,28 @@ import sqlite3
 from datetime import datetime
 import os
 
+from dateutil import parser as date_parser
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "appointments.db")
 
-# print(DB_NAME)
-# print(BASE_DIR)
-
+def normalize_time(time_str):
+    try:
+        # Pre-process natural language to help parser
+        t = time_str.lower().strip()
+        t = t.replace("in the afternoon", "pm")
+        t = t.replace("in the evening", "pm")
+        t = t.replace("in the morning", "am")
+        t = t.replace("afternoon", "pm")
+        t = t.replace("evening", "pm")
+        t = t.replace("morning", "am")
+        
+        # Parse and format
+        dt = date_parser.parse(t)
+        return dt.strftime("%H:%M")
+    except Exception as e:
+        print(f"Time Parse Error: {e}")
+        return time_str # Fallback
 
 def init_db():
     conn = sqlite3.connect(DB_NAME)
@@ -29,19 +45,24 @@ def init_db():
     print("Database initialized.")
 
 def is_slot_available(date, time):
+    clean_time = normalize_time(time)
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     # Check if a slot is taken on a specific DATE and TIME
     cursor.execute('''
         SELECT count(*) FROM appointments 
         WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'
-    ''', (date, time))
+    ''', (date, clean_time))
     count = cursor.fetchone()[0]
     conn.close()
+    if count > 0:
+        print(f"Slot {date} {clean_time} is BUSY.")
     return count == 0
 
 def book_appointment(first_name, last_name, appointment_date, appointment_time, reason):
     print("book_appointment() CALLED")
+    clean_time = normalize_time(appointment_time)
+    
     """
     Saves the appointment to the database.
     """
@@ -52,9 +73,9 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
         cursor.execute('''
             INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason)
             VALUES (?, ?, ?, ?, ?)
-        ''', (first_name, last_name, appointment_date, appointment_time, reason))
+        ''', (first_name, last_name, appointment_date, clean_time, reason))
         conn.commit()
-        print(f"Booking saved for {first_name} {last_name} at {appointment_date} {appointment_time}")
+        print(f"Booking saved for {first_name} {last_name} at {appointment_date} {clean_time}")
         return True
     except Exception as e:
         print(f"Error booking: {e}")
@@ -66,9 +87,10 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
 def get_available_slots(date):
     """
     Returns a list of available times for a given date.
-    Standard slots: 10:00 AM, 12:00 PM, 2:00 PM, 4:00 PM
+    Standard slots are now in 24-hour format for consistency.
     """
-    standard_slots = ["10:00 AM", "11:00 AM", "12:00 PM", "01:00 PM", "02:00 PM", "03:00 PM", "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM", "08:00 PM"]
+    # 10am to 8pm in 24h format
+    standard_slots = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
     
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
