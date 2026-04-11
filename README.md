@@ -1,18 +1,18 @@
-# AI Receptionist
+# AI Receptionist - Doctor Farooq's Dental Clinic
 
 ## Project Overview
 
-This project is a real-time AI Voice Receptionist capable of answering phone calls, processing speech, and responding intelligently. It serves as a bridge between traditional telephony (Twilio) and modern AI audio streaming (Deepgram).
+This project is a real-time AI Voice and Text Receptionist capable of answering phone calls, handling text chats, processing speech/text, checking availability, and booking appointments intelligently. It serves as a bridge between traditional telephony (Twilio), a browser-based chat interface, and a modern AI engine (Deepgram/LLMs).
 
 The system is built using **FastAPI** for high-performance asynchronous handling of WebSocket connections and HTTP requests.
 
-## Architecture
+## Features
 
-The application is designed with a modular architecture to separate infrastructure from logic:
-
-- **Telephony Layer (Twilio):** Handles the physical phone line, voice capture, and audio playback.
-- **Server Layer (FastAPI):** Acts as the central switchboard, managing Webhook events and WebSocket streams.
-- **Intelligence Layer (Deepgram):** Processes live audio streams to transcribe speech to text in real-time.
+- **Voice Calls:** Answers live phone calls via Twilio and streams audio back and forth with Deepgram's AI Voice Agent.
+- **Text Testing UI:** A beautiful, responsive browser-based chat interface to test the agent's logic, prompts, and booking flows without needing to make phone calls.
+- **Real-Time Booking:** Checks availability and books appointments directly into a local SQLite database (`appointments.db`).
+- **Conversational Intelligence:** The agent asks for names, desired dates/times, and reasons for the visit, confirms the booking, and accurately handles unavailable slots or follow-up questions.
+- **Conversation Logging:** Automatically logs all testing conversations to the filesystem for review.
 
 ## Tech Stack
 
@@ -20,8 +20,39 @@ The application is designed with a modular architecture to separate infrastructu
 - **Framework:** FastAPI
 - **Server:** Uvicorn
 - **Telephony:** Twilio (Programmable Voice)
-- **Speech-to-Text:** Deepgram SDK
-- **Tunneling:** Ngrok (for local development)
+- **AI Engine:** Deepgram Agent SDK (Voice & Text)
+- **Database:** SQLite3
+- **Tunneling:** Ngrok (for local development voice testing)
+- **Frontend (Testing):** HTML5, Vanilla CSS, JS
+
+---
+
+## Project Structure
+
+The generative AI logic, database interaction, and routing layers are separated for maintainability:
+
+```text
+ai-receptionist/
+├── main.py                 # Entry point. Initializes FastAPI and connects all routers.
+├── requirements.txt        # Python dependencies.
+├── .env                    # Environment variables (API Keys).
+├── appointments.db         # SQLite database storing the appointments.
+├── data/
+│   └── config.json         # Deepgram Agent configuration and system prompt.
+├── routers/
+│   ├── twilio.py           # Handles incoming Twilio calls and XML (TwiML).
+│   ├── brain.py            # Manages WebSocket audio streams to Deepgram.
+│   └── text_test.py        # Manages WebSocket text streams for the browser UI.
+├── services/
+│   ├── agent_logic.py      # Core logic, recap extraction, and booking triggers.
+│   ├── database.py         # DB connection, schema, and queries.
+│   ├── tools.py            # Date parsing, availability checks.
+│   └── conversation_logger.py # Utility to save chat transcripts locally.
+├── static/
+│   └── test_chat.html      # The frontend web UI for text testing.
+└── tests/
+    └── conversation_logs/  # Saved transcripts from text testing.
+```
 
 ---
 
@@ -32,142 +63,97 @@ Follow these steps to set up the project locally.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/ai-receptionist.git
+git clone <repository-url>
 cd ai-receptionist
-
 ```
 
 ### 2. Set Up Virtual Environment
 
-It is recommended to use a virtual environment to manage dependencies.
+It is required to use a virtual environment named `ai-recep-venv` or similar to manage dependencies.
 
 **Windows:**
-
 ```bash
-python -m venv venv
-.\venv\Scripts\activate
-
+python -m venv ai-recep-venv
+.\ai-recep-venv\Scripts\activate
 ```
 
 **Mac/Linux:**
-
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-
+python3 -m venv ai-recep-venv
+source ai-recep-venv/bin/activate
 ```
 
 ### 3. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
-
 ```
 
----
+### 4. Configuration
 
-## Configuration
-
-This project requires sensitive API keys. These keys must be stored in a `.env` file, which is excluded from version control for security.
-
-1. Create a file named `.env` in the root directory.
-2. Add the following variables:
+This project requires sensitive API keys. Create a file named `.env` in the root directory and add the following:
 
 ```ini
-# Deepgram API Key (Required for transcription)
+# Deepgram API Key (Required for AI Agent)
 DEEPGRAM_API_KEY=your_deepgram_key_here
-
-# Twilio Credentials (Optional: Only required if using Twilio SDK features later)
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-
 ```
 
 ---
 
 ## Usage Instructions
 
-To make the AI Receptionist operational, you must run the local server and expose it to the internet so Twilio can access it.
+### Starting the Server
 
-### Step 1: Start the Local Server
-
-Run the application using Uvicorn. This starts the FastAPI server on port 8000.
+Run the application using Python (which invokes Uvicorn via `main.py`). The server runs on port `8000`.
 
 ```bash
-uvicorn main:app --reload
-
+python main.py
 ```
 
-### Step 2: Expose Server via Ngrok
+### Method A: Testing via Browser Text Chat (No Twilio Required)
 
-Open a new terminal window and run Ngrok to create a secure tunnel to your localhost.
+The easiest way to test the agent's brain and booking flows:
 
-```bash
-ngrok http 8000
+1. Start the server (`python main.py`).
+2. Open your web browser and go to:
+   **`http://localhost:8000/static/test_chat.html`**
+3. Click "Start Conversation" and chat with Sarah. Your conversation will be logged in the `tests/conversation_logs` directory.
 
-```
+### Method B: Testing via Phone Call (Twilio + Ngrok)
 
-_Copy the HTTPS URL provided by Ngrok (e.g., `https://example.ngrok-free.app`)._
+To test the actual voice AI over a real phone call:
 
-### Step 3: Configure Twilio Webhook
-
-1. Log in to the **Twilio Console**.
-2. Navigate to **Phone Numbers** > **Manage** > **Active Numbers**.
-3. Select your number.
-4. Under the **Voice & Fax** section, locate **"A Call Comes In"**.
-5. Set the type to **Webhook**.
-6. Paste your Ngrok URL and append `/incoming-call`.
-
-- _Example:_ `https://example.ngrok-free.app/incoming-call`
-
-7. Ensure the HTTP method is set to **POST**.
-8. Save changes.
+1. **Start the local server** (`python main.py`).
+2. **Start Ngrok** in a new terminal to expose your local server to the internet:
+   ```bash
+   ngrok http 8000
+   ```
+   *Copy the HTTPS URL provided by Ngrok (e.g., `https://1234-abcd.ngrok-free.app`).*
+3. **Configure Twilio:**
+   - Log in to the Twilio Console.
+   - Go to Phone Numbers > Manage > Active Numbers.
+   - Under "Voice & Fax", find "A Call Comes In".
+   - Set it to Webhook, and paste your Ngrok URL followed by `/incoming-call`.
+   - Example: `https://1234-abcd.ngrok-free.app/incoming-call`
+   - Set HTTP method to **POST** and save.
+4. **Call your Twilio number.**
 
 ---
 
-## Project Structure
+## Database Management
 
-The codebase is organized into modular routers to prevent conflicts between infrastructure logic and AI logic.
+The SQLite database (`appointments.db`) is automatically created and initialized when you start the server. 
+It contains a single table `appointments` with columns for `first_name`, `last_name`, `reason`, `appointment_date`, `appointment_time`, and `status`.
 
-```text
-ai-receptionist/
-├── main.py                 # Entry point. Initializes FastAPI and connects routers.
-├── requirements.txt        # List of Python dependencies.
-├── .env                    # Environment variables (API Keys).
-├── .gitignore              # Specifies files to exclude from Git (e.g., .env, venv).
-└── routers/
-    ├── twilio.py           # Handles incoming calls and TwiML XML responses.
-    └── deepgram.py         # Manages WebSocket connections for real-time audio.
-
-```
-
-## API Endpoints
-
-### `POST /incoming-call`
-
-- **Description:** The entry point for all phone calls. Twilio hits this endpoint when a user dials the number.
-- **Response:** Returns TwiML (XML) instructions telling Twilio to connect the call to the media stream.
-
-### `WebSocket /media-stream`
-
-- **Description:** A bidirectional WebSocket connection.
-- **Function:** Receives raw audio data from Twilio and forwards it to the Deepgram AI service for processing.
+Standard operational hours configured are 10:00 AM to 8:00 PM.
 
 ---
 
 ## Troubleshooting
 
-**Issue: "404 Not Found" when calling**
-
-- **Cause:** The Webhook URL in Twilio is incorrect.
-- **Fix:** Ensure you added `/incoming-call` to the end of your Ngrok URL.
-
-**Issue: "Method Not Allowed"**
-
-- **Cause:** The Twilio Webhook is set to GET.
-- **Fix:** Change the Webhook method to POST in the Twilio Console.
-
-**Issue: Server crashes on startup**
-
-- **Cause:** Missing environment variables or dependencies.
-- **Fix:** Ensure `.env` exists and `pip install -r requirements.txt` was run successfully.
+- **Text Chat stuck on "Connecting..."**
+  Ensure the server is running on port 8000 and your `.env` contains a valid `DEEPGRAM_API_KEY`.
+- **"404 Not Found" When Calling (Twilio)**
+  Ensure you added `/incoming-call` to the end of your Ngrok URL in the Twilio Webhook settings.
+- **Server Crashes on Startup**
+  Double-check your virtual environment is active and all packages from `requirements.txt` are installed.
