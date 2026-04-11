@@ -25,10 +25,12 @@
 import os
 import uvicorn
 from fastapi import FastAPI, WebSocket
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
 # Import your modules
 from routers import twilio
+from routers import text_test
 from routers.brain import process_audio_stream
 
 # Load environment variables
@@ -39,6 +41,13 @@ app = FastAPI()
 # 1. Register the Twilio HTTP Route (The "Doorbell")
 # This handles the initial ringing of the phone.
 app.include_router(twilio.router)
+
+# 1b. Register the Text Test Route (for testing without Twilio)
+# Provides a /test-chat WebSocket endpoint for text-based testing.
+app.include_router(text_test.router)
+
+# 1c. Serve static files (browser test chat page)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 2. Register the Health Check
 @app.get("/")
