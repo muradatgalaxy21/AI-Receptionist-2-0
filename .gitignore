@@ -1,9 +1,10 @@
-<<<<<<< HEAD
 .env
 venv/
-__pycache__/
 ai-recep-venv/
 .ai-recep-venv/
+__pycache__/
+temp_auto_push.bat
+temp_interactive_push.bat
 *.pyc
 .DS_Store
 *.db
@@ -12,23 +13,3 @@ appointments.db
 database-manage.py
 test_time_format.py
 tests/conversation_logs/
-=======
-.env
-venv/
-__pycache__/
-=======
-ai-recep-venv/
-.ai-recep-venv/
-__pycache__/
-temp_auto_push.bat
-*.pyc
-.DS_Store
-*.db
-*.sqlite3
-appointments.db
-database-manage.py
-test_time_format.py
-tests/
-temp_interactive_push.bat
-.gitignore
->>>>>>> 18cdf1fdf1ac21eeebefc7454908d8281449edd8

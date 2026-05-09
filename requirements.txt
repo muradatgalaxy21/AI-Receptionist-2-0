@@ -5,7 +5,7 @@ deepgram-sdk
 python-dotenv
 twilio
 python-multipart
-pyngrok
+python-dateutil
 
 
 aiohappyeyeballs==2.6.1
