@@ -1,4 +1,4 @@
-app = "ai-receptionist"
+app = "ai-receptionist-drfarooq"
 primary_region = "ord"
 
 [build]
