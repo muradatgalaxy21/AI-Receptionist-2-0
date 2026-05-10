@@ -13,3 +13,4 @@ appointments.db
 database-manage.py
 test_time_format.py
 tests/conversation_logs/
+.claude/
