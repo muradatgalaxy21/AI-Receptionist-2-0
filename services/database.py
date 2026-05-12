@@ -84,27 +84,69 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
         conn.close()
 
 
-def get_available_slots(date):
+def get_available_slots(date: str) -> list:
     """
-    Returns a list of available times for a given date.
-    Standard slots are now in 24-hour format for consistency.
+    Returns a list of available time slots for a given date.
+    1. Determines slot range based on day of week (Saturday is half-day).
+    2. Queries the DB for already-booked slots on that date.
+    3. Returns only the slots that are NOT booked.
     """
-    # 10am to 8pm in 24h format
-    standard_slots = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
-    
+    try:
+        day_of_week: str = datetime.strptime(date, "%Y-%m-%d").strftime("%A")
+    except ValueError:
+        day_of_week = "Monday"
+
+    # Saturday is half-day 9am-1pm; Sunday is closed; Mon-Fri last slot at 5pm
+    if day_of_week == "Sunday":
+        return []
+    elif day_of_week == "Saturday":
+        standard_slots = ["09:00", "10:00", "11:00", "12:00"]
+    else:
+        standard_slots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
-        SELECT appointment_time FROM appointments 
-        WHERE appointment_date = ? AND status = 'confirmed'
-    ''', (date,))
+    cursor.execute(
+        "SELECT appointment_time FROM appointments WHERE appointment_date = ? AND status = 'confirmed'",
+        (date,)
+    )
     booked_slots = [row[0] for row in cursor.fetchall()]
     conn.close()
-    
-    # Normalize booked slots to compare easily (stripping logic if needed, but assuming exact match for now)
-    available = [slot for slot in standard_slots if slot not in booked_slots]
-    return available
+
+    return [slot for slot in standard_slots if slot not in booked_slots]
+
+
+def get_available_dates_with_slots(days_ahead: int = 14) -> list:
+    """
+    Scans the next N calendar days and returns dates that still have
+    at least one free slot. Used for 'which dates are free?' queries.
+    1. Iterates from tomorrow up to days_ahead days.
+    2. Skips Sundays (clinic closed).
+    3. Returns list of dicts with date, day name, and slot count.
+    """
+    from datetime import timedelta
+
+    results = []
+    today = datetime.now().date()
+
+    for offset in range(1, days_ahead + 1):
+        check_date = today + timedelta(days=offset)
+        date_str = check_date.strftime("%Y-%m-%d")
+        day_name = check_date.strftime("%A")
+
+        if day_name == "Sunday":
+            continue
+
+        slots = get_available_slots(date_str)
+        if slots:
+            results.append({
+                "date": date_str,
+                "day": day_name,
+                "slots_available": len(slots)
+            })
+
+    return results
+
 
 # Initialize the DB immediately when this file is imported
 init_db()
-    
