@@ -5,10 +5,215 @@
 
 import re
 import json
+from datetime import datetime
 from typing import Dict, Optional, Any
 
-from services.database import book_appointment
+from services.database import book_appointment, get_available_dates_with_slots
 from services.tools import check_availability, parse_date, get_available_slots_tool
+
+# Keywords indicating user is explicitly asking about available slots/times.
+SLOT_QUERY_KEYWORDS: list = [
+    "which slot", "which time", "what time", "free slot", "available slot",
+    "open slot", "free time", "available time", "any slot", "any time",
+    "what slots", "what times", "which times", "slots available", "times available",
+    "slot free", "open time", "is there any slot", "what are the slots",
+    "when can i come", "when can i book", "which hours",
+]
+
+# Keywords indicating user is asking about which DATES have availability.
+DATE_AVAILABILITY_KEYWORDS: list = [
+    "which date", "what date", "which day", "what day", "any date", "any day",
+    "which dates", "what dates", "which days", "what days",
+    "when are you free", "when is available", "earliest available",
+    "soonest available", "next available",
+]
+
+
+def _to_12h(slot: str) -> str:
+    """Convert a 24h HH:MM slot string to a readable 12h AM/PM format."""
+    try:
+        dt = datetime.strptime(slot, "%H:%M")
+        return dt.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return slot
+
+
+def _extract_date_from_user_text(text: str) -> Optional[str]:
+    """
+    Try to extract a date reference from the user's raw message.
+    1. Looks for explicit date patterns (dd-mm-yyyy, dd/mm/yyyy, 'May 21').
+    2. Falls back to relative phrases ('today', 'tomorrow', 'next thursday').
+    3. Returns a parsed YYYY-MM-DD string, or None if nothing found.
+    """
+    text_lower: str = text.lower().strip()
+
+    # Explicit date patterns: 21-05-2026 / 21/05/2026 / May 21 / 21st May etc.
+    explicit_pattern = re.search(
+        r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}"
+        r"|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \d{1,2}"
+        r"|\d{1,2}(?:st|nd|rd|th)? (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)",
+        text_lower
+    )
+    if explicit_pattern:
+        return parse_date(explicit_pattern.group(0))
+
+    # Relative day keywords -- order matters: check multi-word phrases first
+    relative_keywords = [
+        "next monday", "next tuesday", "next wednesday", "next thursday",
+        "next friday", "next saturday", "next sunday",
+        "this monday", "this tuesday", "this wednesday", "this thursday",
+        "this friday", "this saturday", "this sunday",
+        "day after tomorrow",
+        "today", "tomorrow",
+        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    ]
+    for kw in relative_keywords:
+        if kw in text_lower:
+            return parse_date(kw)
+
+    return None
+
+
+async def handle_date_selection_in_booking(
+    user_text: str,
+    conversation_state: Dict[str, Any],
+    dg_agent: Any
+) -> bool:
+    """
+    Proactively inject real available slots whenever the user mentions a date.
+    This fires BEFORE Sarah asks 'what time?', so the user is told which slots 
+    exist rather than having to guess.
+
+    1. Looks for a date reference in the user's message.
+    2. Queries the DB for free slots on that date.
+    3. Injects the slot list (or a fully-booked notice) as a SYSTEM message.
+    """
+    # Try to extract a date from what the user just said
+    target_date: Optional[str] = _extract_date_from_user_text(user_text)
+    if not target_date:
+        return False
+
+    # Query the DB for real free slots
+    available_slots: list = get_available_slots_tool(target_date)
+    readable: list = [_to_12h(s) for s in available_slots]
+
+    print(f"[BOOKING DATE] Date: {target_date} | Free slots: {readable}")
+
+    if readable:
+        slots_str: str = ", ".join(readable)
+        inject_content: str = (
+            f"[SYSTEM]: The patient mentioned {target_date}. Database shows these "
+            f"slots are OPEN: {slots_str}. Present these real options clearly "
+            f"and ask which they prefer. Do NOT make up times."
+        )
+    else:
+        inject_content: str = (
+            f"[SYSTEM]: The patient mentioned {target_date}. Database shows ALL "
+            f"slots are FULLY BOOKED. Tell them and ask to pick another date."
+        )
+
+    try:
+        await dg_agent.send(json.dumps({"type": "InjectUserMessage", "content": inject_content}))
+    except Exception as e:
+        print(f"[BOOKING DATE] Injection error: {e}")
+
+    return True
+
+
+async def handle_user_slot_query(
+    user_text: str,
+    conversation_state: Dict[str, Any],
+    dg_agent: Any
+) -> bool:
+    """
+    Handle explicit user queries about available slots or dates.
+    Covers two cases:
+      A) 'Which slots are free on Thursday?' -- date-specific slot lookup.
+      B) 'Which dates are available?' -- multi-date scan.
+
+    1. Detects query type from keywords.
+    2. Queries the DB appropriately.
+    3. Injects a SYSTEM message with real data for the AI to relay.
+
+    Returns True if query was handled, False otherwise.
+    """
+    text_lower: str = user_text.lower()
+
+    # Case B: User asking which dates have availability (multi-date scan)
+    is_date_query: bool = any(kw in text_lower for kw in DATE_AVAILABILITY_KEYWORDS)
+    if is_date_query:
+        print("[SLOT QUERY] Multi-date availability query detected.")
+        available_dates: list = get_available_dates_with_slots(days_ahead=14)
+
+        if available_dates:
+            # Build a brief readable summary: "Monday May 13 (8 slots), Tuesday May 14 (9 slots), ..."
+            summaries = [
+                f"{d['day']} {d['date']} ({d['slots_available']} slot{'s' if d['slots_available'] != 1 else ''})"
+                for d in available_dates[:7]  # Show at most 7 days to keep it concise
+            ]
+            dates_str: str = "; ".join(summaries)
+            inject_content: str = (
+                f"[SYSTEM]: Real-time database scan shows the following dates have "
+                f"open appointments in the next two weeks: {dates_str}. "
+                f"Share this list with the patient and ask which date suits them."
+            )
+        else:
+            inject_content: str = (
+                "[SYSTEM]: Real-time database scan shows that all slots for the "
+                "next two weeks are FULLY BOOKED. Inform the patient and suggest "
+                "they call back later."
+            )
+
+        try:
+            await dg_agent.send(json.dumps({"type": "InjectUserMessage", "content": inject_content}))
+        except Exception as e:
+            print(f"[SLOT QUERY] Multi-date injection error: {e}")
+        return True
+
+    # Case A: User asking about slots on a specific date
+    is_slot_query: bool = any(kw in text_lower for kw in SLOT_QUERY_KEYWORDS)
+    if not is_slot_query:
+        return False
+
+    target_date: Optional[str] = _extract_date_from_user_text(user_text)
+
+    if not target_date:
+        # Date not mentioned -- ask for it
+        inject_content = (
+            "[SYSTEM]: The user is asking about available slots but has not "
+            "specified a date. Please ask them which date they have in mind."
+        )
+        try:
+            await dg_agent.send(json.dumps({"type": "InjectUserMessage", "content": inject_content}))
+        except Exception as e:
+            print(f"[SLOT QUERY] No-date injection error: {e}")
+        return True
+
+    available_slots = get_available_slots_tool(target_date)
+    readable = [_to_12h(s) for s in available_slots]
+    print(f"[SLOT QUERY] Date: {target_date} | Available: {readable}")
+
+    if readable:
+        slots_str = ", ".join(readable)
+        inject_content = (
+            f"[SYSTEM]: Real-time database check for {target_date} shows these "
+            f"slots are AVAILABLE: {slots_str}. Share exactly these options with "
+            f"the patient in a friendly way."
+        )
+    else:
+        inject_content = (
+            f"[SYSTEM]: Real-time database check for {target_date} shows ALL "
+            f"slots are FULLY BOOKED. Inform the patient and ask if they would "
+            f"like to choose a different date."
+        )
+
+    try:
+        await dg_agent.send(json.dumps({"type": "InjectUserMessage", "content": inject_content}))
+    except Exception as e:
+        print(f"[SLOT QUERY] Injection error: {e}")
+
+    return True
+
 
 # Farewell phrases that signal the agent intends to end the call.
 # When any of these appear in the agent's text the session should close.
