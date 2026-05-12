@@ -6,6 +6,10 @@ python-dotenv
 twilio
 python-multipart
 python-dateutil
+streamlit
+pandas
+streamlit-autorefresh
+matplotlib
 
 
 aiohappyeyeballs==2.6.1
