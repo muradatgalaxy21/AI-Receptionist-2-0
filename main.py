@@ -26,6 +26,7 @@ import os
 import uvicorn
 from fastapi import FastAPI, WebSocket
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
 # Import your modules
@@ -53,6 +54,12 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 async def health_check():
     return {"status": "AI Receptionist is Fully Operational"}
+
+# 2b. Serve the Chat Page at a clean URL
+@app.get("/chat")
+async def chat_page():
+    """Serves the text-based chat interface."""
+    return FileResponse("static/test_chat.html")
 
 # 3. THE MISSING LINK: The WebSocket Route (The "Conversation")
 # When Twilio connects the audio, it looks for "/media-stream".
