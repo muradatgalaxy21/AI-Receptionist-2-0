@@ -15,3 +15,4 @@ test_time_format.py
 tests/conversation_logs/
 .claude/
 .gitignore
+scratch*.py
