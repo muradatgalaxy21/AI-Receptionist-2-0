@@ -11,7 +11,11 @@ from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
-from services.agent_logic import process_agent_text_response
+from services.agent_logic import (
+    process_agent_text_response,
+    handle_user_slot_query,
+    handle_date_selection_in_booking,
+)
 from services.conversation_logger import ConversationLogger
 
 load_dotenv()
@@ -28,21 +32,19 @@ KEEPALIVE_INTERVAL_SECONDS: int = 5
 def load_agent_config_for_text() -> dict:
     """
     Load and modify the agent config for text-only mode.
-    1. Reads data/config.json.
-    2. Injects current datetime into the prompt.
-    3. Audio settings remain the same since Deepgram agent always produces
-       audio output -- we simply discard it on our end.
-
-    Returns:
-        The agent configuration dict ready to send to Deepgram.
     """
     with open("data/config.json", "r") as f:
         agent_config: dict = json.load(f)
 
+    with open("data/data.json", "r") as f:
+        clinic_data: str = f.read()
+
     # Inject current date and time
     current_time: str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-    agent_config["agent"]["think"]["prompt"] += f"\n\nCONTEXT: Today is {current_time}."
-    print(f"[TEXT-TEST] Injecting time into prompt: {current_time}")
+    
+    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
+    agent_config["agent"]["think"]["prompt"] += context_str
+    print(f"[TEXT-TEST] Injecting time and clinic data into prompt.")
 
     return agent_config
 
@@ -277,8 +279,28 @@ async def text_chat(websocket: WebSocket) -> None:
                         print(f"[TEXT-TEST] User: {user_text}")
                         logger.log("USER", user_text)
 
-                        # Inject the text as a user message to the Deepgram agent
-                        # This is the official Deepgram API for text input
+                        # Step A: Explicit slot/date-availability query.
+                        # Fires when user asks 'which slots are free' or 'which dates'.
+                        # Queries DB and injects real data for Sarah to relay.
+                        slot_query_detected: bool = await handle_user_slot_query(
+                            user_text, conversation_state, dg_agent
+                        )
+
+                        if slot_query_detected:
+                            print("[TEXT-TEST] Slot/date query handled via DB injection.")
+                            continue
+
+                        # Step B: Booking flow date selection.
+                        # Fires when user mentions a date while we already have their name.
+                        # Proactively fetches and injects real available slots for that date
+                        # so Sarah tells the user the options rather than asking them to guess.
+                        date_injected: bool = await handle_date_selection_in_booking(
+                            user_text, conversation_state, dg_agent
+                        )
+                        # Do NOT stop here -- still send the user message so Sarah
+                        # has full context (date + system slots data together).
+
+                        # Step C: Normal path -- forward user text to Deepgram agent
                         inject_message: dict = {
                             "type": "InjectUserMessage",
                             "content": user_text
