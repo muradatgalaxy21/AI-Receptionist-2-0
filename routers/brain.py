@@ -1,4 +1,5 @@
 # routers/brain.py
+from datetime import datetime
 # Handles the Twilio media stream WebSocket connection.
 # Bridges audio between Twilio (phone) and the Deepgram Agent API.
 # Response processing (recap extraction, booking) is delegated to
@@ -12,7 +13,7 @@ import os
 from datetime import datetime
 from fastapi import WebSocket
 from dotenv import load_dotenv
-from services.agent_logic import process_agent_text_response
+from services.agent_logic import process_agent_text_response, handle_user_slot_query
 
 load_dotenv()
 
@@ -23,26 +24,29 @@ AGENT_URL: str = "wss://agent.deepgram.com/v1/agent/converse"
 def load_agent_config() -> dict:
     """
     Load the agent configuration from data/config.json and inject
-    the current date/time into the system prompt.
-    1. Reads the JSON config file.
-    2. Appends a CONTEXT line with the current timestamp.
-
-    Returns:
-        The loaded and augmented config dict.
+    the current date/time and clinic data into the system prompt.
     """
     with open("data/config.json", "r") as f:
         agent_config: dict = json.load(f)
 
+    with open("data/data.json", "r") as f:
+        clinic_data: str = f.read()
+
     # Inject current date and time so the agent knows "today"
     current_time: str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-    agent_config["agent"]["think"]["prompt"] += f"\n\nCONTEXT: Today is {current_time}."
-    print(f"Injecting time into prompt: {current_time}")
+    
+    # Append context and clinic data
+    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
+    agent_config["agent"]["think"]["prompt"] += context_str
+    print(f"Injecting time and clinic data into prompt.")
 
     return agent_config
 
 
 async def process_audio_stream(websocket: WebSocket) -> None:
     """
+    Handles a Twilio media stream WebSocket session and logs call details after completion.
+
     Main handler for a Twilio media stream WebSocket session.
     1. Connects to Deepgram Agent API with the loaded config.
     2. Runs two async tasks in parallel:
@@ -50,6 +54,9 @@ async def process_audio_stream(websocket: WebSocket) -> None:
        - receive_agent_audio: forwards Deepgram responses back to Twilio
     3. Response text processing is delegated to the shared agent_logic module.
     """
+    # Record start time of the call for duration calculation
+    start_time: datetime = datetime.utcnow()
+
     conversation_state: dict = {
         "first_name": None,
         "last_name": None,
@@ -153,11 +160,50 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                 asyncio.create_task(send_mic_audio()),
                 asyncio.create_task(receive_agent_audio())
             ]
+
             done, pending = await asyncio.wait(
                 tasks, return_when=asyncio.FIRST_COMPLETED
             )
             for task in pending:
                 task.cancel()
+
+            # Calculate call metrics and log them
+            from services.call_logger import append_call_log
+            import uuid
+            end_time: datetime = datetime.utcnow()
+            call_duration: float = (end_time - start_time).total_seconds()
+            
+            # Extract patient name if available
+            patient_name: str = ""
+            if conversation_state.get("first_name") and conversation_state.get("last_name"):
+                patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
+                
+            # Determine intent based on whether a booking was confirmed
+            intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
+            status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Follow-up Needed"
+            
+            # Placeholder estimated value – could be derived from business logic
+            estimated_value: float = 100.0 if conversation_state.get("booking_confirmed") else 0.0
+            
+            # Recording URL – TBD, placeholder for now
+            recording_url: str = ""
+            # Caller ID – not available in current context, set to unknown
+            caller_id: str = "unknown"
+            # Timestamp for CSV entry
+            timestamp: str = end_time.isoformat()
+            
+            # Append to CSV
+            append_call_log(
+                timestamp=timestamp,
+                caller_id=caller_id,
+                patient_name=patient_name,
+                call_duration=call_duration,
+                intent=intent,
+                summary=conversation_state.get("last_summary", ""),
+                status=status,
+                estimated_value=estimated_value,
+                recording_url=recording_url,
+            )
 
     except Exception as e:
         print(f"Connection Error: {e}")
