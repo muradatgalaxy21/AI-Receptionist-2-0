@@ -1,24 +1,24 @@
 {
   "clinic_info": {
-    "name": "Dr. Farooq's Dental Clinic",
-    "doctor": "Dr. Syed Farooq Ali",
-    "location": "DHA Phase 5, Lahore",
-    "contact": "+1-555-0199"
+    "name": "Bright Smile Dental Care",
+    "doctor": "Dr. Alexander Wright",
+    "location": "1234 Maple Avenue, Suite 200, Seattle, WA 98104",
+    "contact": "+1-206-555-0199"
   },
   "timings": {
-    "Monday": "10:00 AM - 08:00 PM",
-    "Tuesday": "10:00 AM - 08:00 PM",
-    "Wednesday": "10:00 AM - 08:00 PM",
-    "Thursday": "10:00 AM - 08:00 PM",
-    "Friday": "10:00 AM - 08:00 PM",
-    "Saturday": "10:00 AM - 08:00 PM",
+    "Monday": "09:00 AM - 06:00 PM",
+    "Tuesday": "09:00 AM - 06:00 PM",
+    "Wednesday": "09:00 AM - 06:00 PM",
+    "Thursday": "09:00 AM - 06:00 PM",
+    "Friday": "09:00 AM - 06:00 PM",
+    "Saturday": "09:00 AM - 01:00 PM",
     "Sunday": "Closed"
   },
   "services_price_list": {
-    "Consultation": "2000 PKR",
-    "Scaling_Cleaning": "5000 PKR",
-    "Root_Canal": "Starts from 15000 PKR",
+    "Consultation": "$100",
+    "Scaling_Cleaning": "$150",
+    "Root_Canal": "Starts from $800",
     "Braces": "Consultation Required",
-    "Extraction": "3000 PKR"
+    "Extraction": "$200"
   }
 }
