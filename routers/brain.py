@@ -81,12 +81,12 @@ async def process_audio_stream(websocket: WebSocket) -> None:
     print(f"Connecting to: {AGENT_URL}")
 
     try:
-        # extra_headers: auth token for Deepgram.
+        # additional_headers: auth token for Deepgram.
         # ping_interval/ping_timeout: built-in keepalive pings every 30 s so
         # the Deepgram connection does not idle-close during long phone calls.
         async with websockets.connect(
             AGENT_URL,
-            extra_headers=headers,
+            additional_headers=headers,
             ping_interval=30,
             ping_timeout=60,
         ) as dg_agent:

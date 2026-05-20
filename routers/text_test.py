@@ -110,7 +110,7 @@ async def text_chat(websocket: WebSocket) -> None:
     try:
         async with websockets.connect(
             AGENT_URL,
-            extra_headers=headers,
+            additional_headers=headers,
             # Enable built-in WebSocket ping/pong frames to detect dead connections
             ping_interval=20,
             ping_timeout=10,
