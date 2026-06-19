@@ -62,11 +62,11 @@ async def voice_chat(websocket: WebSocket):
 
     session_active = True
 
+    _ws_ver = tuple(int(x) for x in websockets.__version__.split(".")[:2])
+    _header_kwarg = "additional_headers" if _ws_ver >= (10, 0) and _ws_ver < (14, 0) else "extra_headers"
+
     try:
-        async with websockets.connect(
-            AGENT_URL,
-            additional_headers=headers,
-        ) as dg_agent:
+        async with websockets.connect(AGENT_URL, **{_header_kwarg: headers}) as dg_agent:
             await dg_agent.send(json.dumps(config))
             await websocket.send_json({"type": "connected"})
             print("[VOICE] Connected to Deepgram. Sarah is ready.")
