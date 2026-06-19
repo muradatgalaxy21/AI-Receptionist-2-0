@@ -78,15 +78,16 @@ async def process_audio_stream(websocket: WebSocket) -> None:
         print(f"Config Error: {e}")
         return
 
-    print(f"Connecting to: {AGENT_URL}")
-
-    # Build connection kwargs compatible with websockets 10-14+
-    _ws_ver = tuple(int(x) for x in websockets.__version__.split(".")[:2])
-    _header_kwarg = "additional_headers" if _ws_ver >= (10, 0) and _ws_ver < (14, 0) else "extra_headers"
-    ws_kwargs = {_header_kwarg: headers, "ping_interval": 30, "ping_timeout": 60}
+    # Pass auth token in URL — avoids any websockets version header issues
+    agent_url_with_auth = f"{AGENT_URL}?token={DEEPGRAM_API_KEY}"
+    print(f"Connecting to Deepgram Agent (websockets=={websockets.__version__})")
 
     try:
-        async with websockets.connect(AGENT_URL, **ws_kwargs) as dg_agent:
+        async with websockets.connect(
+            agent_url_with_auth,
+            ping_interval=30,
+            ping_timeout=60,
+        ) as dg_agent:
             await dg_agent.send(json.dumps(agent_config))
             print("CONNECTION SUCCESS! Sarah is listening...")
 
