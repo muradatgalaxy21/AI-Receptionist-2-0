@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 # Import your modules
 from routers import twilio
 from routers import text_test
+from routers import voice_browser
 from routers.brain import process_audio_stream
 
 # Load environment variables
@@ -46,6 +47,7 @@ app.include_router(twilio.router)
 # 1b. Register the Text Test Route (for testing without Twilio)
 # Provides a /test-chat WebSocket endpoint for text-based testing.
 app.include_router(text_test.router)
+app.include_router(voice_browser.router)
 
 # 1c. Serve static files (browser test chat page)
 app.mount("/static", StaticFiles(directory="static"), name="static")

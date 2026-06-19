@@ -6,19 +6,31 @@
     "contact": "+1-206-555-0199"
   },
   "timings": {
-    "Monday": "09:00 AM - 06:00 PM",
-    "Tuesday": "09:00 AM - 06:00 PM",
-    "Wednesday": "09:00 AM - 06:00 PM",
-    "Thursday": "09:00 AM - 06:00 PM",
-    "Friday": "09:00 AM - 06:00 PM",
-    "Saturday": "09:00 AM - 01:00 PM",
+    "Monday": "9 AM to 6 PM",
+    "Tuesday": "9 AM to 6 PM",
+    "Wednesday": "9 AM to 6 PM",
+    "Thursday": "9 AM to 6 PM",
+    "Friday": "9 AM to 6 PM",
+    "Saturday": "9 AM to 1 PM",
     "Sunday": "Closed"
   },
   "services_price_list": {
     "Consultation": "$100",
-    "Scaling_Cleaning": "$150",
-    "Root_Canal": "Starts from $800",
+    "Scaling and Cleaning": "$150",
+    "Root Canal": "Starts from $800",
     "Braces": "Consultation Required",
     "Extraction": "$200"
+  },
+  "insurance": {
+    "accepted_providers": ["Delta Dental", "Cigna", "MetLife", "Aetna", "Guardian"],
+    "note": "Please bring your insurance card on the day of your visit. Our front desk team will verify your coverage upon arrival."
+  },
+  "new_patients": {
+    "note": "New patients are always welcome. No referral is needed. You can book your first appointment directly by calling us.",
+    "what_to_bring": "Please bring a valid photo ID and your insurance card if you have one."
+  },
+  "emergency_care": {
+    "note": "We do our best to accommodate same-day emergency appointments for patients with urgent dental needs.",
+    "direct_line": "+1-206-555-0199"
   }
 }

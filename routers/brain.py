@@ -110,8 +110,10 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                             audio_bytes: bytes = base64.b64decode(
                                 data["media"]["payload"]
                             )
-                            if dg_agent.open:
+                            try:
                                 await dg_agent.send(audio_bytes)
+                            except Exception:
+                                pass
                         elif data["event"] == "stop":
                             break
                 except Exception:

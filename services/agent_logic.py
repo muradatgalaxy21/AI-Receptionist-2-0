@@ -100,16 +100,20 @@ async def handle_date_selection_in_booking(
     print(f"[BOOKING DATE] Date: {target_date} | Free slots: {readable}")
 
     if readable:
-        slots_str: str = ", ".join(readable)
+        if len(readable) == 1:
+            slots_str = readable[0]
+        elif len(readable) == 2:
+            slots_str = f"{readable[0]} and {readable[1]}"
+        else:
+            slots_str = ", ".join(readable[:-1]) + f", and {readable[-1]}"
         inject_content: str = (
-            f"[SYSTEM]: The patient mentioned {target_date}. Database shows these "
-            f"slots are OPEN: {slots_str}. Present these real options clearly "
-            f"and ask which they prefer. Do NOT make up times."
+            f"The patient mentioned {target_date}. The available slots for that day are {slots_str}. "
+            f"Tell the patient these options and ask which time they prefer."
         )
     else:
         inject_content: str = (
-            f"[SYSTEM]: The patient mentioned {target_date}. Database shows ALL "
-            f"slots are FULLY BOOKED. Tell them and ask to pick another date."
+            f"The patient mentioned {target_date}. Unfortunately all slots for that day are fully booked. "
+            f"Let them know and ask if they would like to try a different date."
         )
 
     try:
@@ -146,22 +150,24 @@ async def handle_user_slot_query(
         available_dates: list = get_available_dates_with_slots(days_ahead=14)
 
         if available_dates:
-            # Build a brief readable summary: "Monday May 13 (8 slots), Tuesday May 14 (9 slots), ..."
             summaries = [
-                f"{d['day']} {d['date']} ({d['slots_available']} slot{'s' if d['slots_available'] != 1 else ''})"
-                for d in available_dates[:7]  # Show at most 7 days to keep it concise
+                f"{d['day']} the {d['date'].split('-')[2].lstrip('0')}th"
+                for d in available_dates[:5]
             ]
-            dates_str: str = "; ".join(summaries)
+            if len(summaries) == 1:
+                dates_str = summaries[0]
+            elif len(summaries) == 2:
+                dates_str = f"{summaries[0]} and {summaries[1]}"
+            else:
+                dates_str = ", ".join(summaries[:-1]) + f", and {summaries[-1]}"
             inject_content: str = (
-                f"[SYSTEM]: Real-time database scan shows the following dates have "
-                f"open appointments in the next two weeks: {dates_str}. "
-                f"Share this list with the patient and ask which date suits them."
+                f"We have availability on the following dates in the next two weeks: {dates_str}. "
+                f"Let the patient know these options and ask which date works best for them."
             )
         else:
             inject_content: str = (
-                "[SYSTEM]: Real-time database scan shows that all slots for the "
-                "next two weeks are FULLY BOOKED. Inform the patient and suggest "
-                "they call back later."
+                "Unfortunately all appointment slots for the next two weeks are fully booked. "
+                "Let the patient know and suggest they call back in a few days."
             )
 
         try:
@@ -180,8 +186,8 @@ async def handle_user_slot_query(
     if not target_date:
         # Date not mentioned -- ask for it
         inject_content = (
-            "[SYSTEM]: The user is asking about available slots but has not "
-            "specified a date. Please ask them which date they have in mind."
+            "The patient is asking about available times but has not mentioned a specific date. "
+            "Please ask them which date they are thinking of."
         )
         try:
             await dg_agent.send(json.dumps({"type": "InjectUserMessage", "content": inject_content}))
@@ -194,17 +200,20 @@ async def handle_user_slot_query(
     print(f"[SLOT QUERY] Date: {target_date} | Available: {readable}")
 
     if readable:
-        slots_str = ", ".join(readable)
+        if len(readable) == 1:
+            slots_str = readable[0]
+        elif len(readable) == 2:
+            slots_str = f"{readable[0]} and {readable[1]}"
+        else:
+            slots_str = ", ".join(readable[:-1]) + f", and {readable[-1]}"
         inject_content = (
-            f"[SYSTEM]: Real-time database check for {target_date} shows these "
-            f"slots are AVAILABLE: {slots_str}. Share exactly these options with "
-            f"the patient in a friendly way."
+            f"For {target_date} the available appointment times are {slots_str}. "
+            f"Share these options with the patient and ask which time suits them."
         )
     else:
         inject_content = (
-            f"[SYSTEM]: Real-time database check for {target_date} shows ALL "
-            f"slots are FULLY BOOKED. Inform the patient and ask if they would "
-            f"like to choose a different date."
+            f"Unfortunately {target_date} is fully booked. "
+            f"Let the patient know and ask if they would like to try a different date."
         )
 
     try:
@@ -357,9 +366,9 @@ async def check_early_availability(
         interrupt_message = {
             "type": "InjectUserMessage",
             "content": (
-                f"[SYSTEM ALERT]: The time {current_time} on {current_date} is "
-                f"UNAVAILABLE. You must STOP and inform the user that this time is "
-                f"taken. Offer these available times: {free_slots_str}. Ask for a new time."
+                f"The time {current_time} on {current_date} has just been taken by another patient. "
+                f"Apologise to the user and let them know that slot is no longer available. "
+                f"The remaining open times for that day are {free_slots_str}. Ask them to choose one."
             )
         }
         try:
@@ -476,7 +485,7 @@ async def try_book_from_json_payload(
                 "message": (
                     f"Perfect! Your appointment has been confirmed for "
                     f"{real_date} at {appt_time}. Thank you for calling "
-                    f"Doctor Farooq's Dental Clinic. Have a great day. Goodbye!"
+                    f"Bright Smile Dental Care. Have a great day. Goodbye!"
                 )
             }
             try:
@@ -496,8 +505,8 @@ async def try_book_from_json_payload(
         interrupt_message = {
             "type": "InjectUserMessage",
             "content": (
-                f"[SYSTEM ALERT]: The requested time is UNAVAILABLE. "
-                f"Tell the user it's taken and offer: {free_slots_str}."
+                f"That appointment slot is no longer available. "
+                f"Apologise to the patient and offer these alternative times instead: {free_slots_str}."
             )
         }
         try:
@@ -537,13 +546,13 @@ async def process_agent_text_response(
         The updated conversation_state dict with a possible
         'session_should_end' key set to True.
     """
-    # Step 1: If the content is a raw JSON payload (e.g. ready_to_book),
-    # process it silently and mark it so callers can suppress display.
+    # Step 1: Handle pure JSON payload OR mixed JSON+text (e.g. JSON + "Goodbye!")
+    # Extract JSON block from content using regex so booking works even when
+    # the agent appends farewell text after the JSON object.
+    json_match = re.search(r'\{[^{}]*"type"\s*:\s*"ready_to_book"[^{}]*\}', content, re.DOTALL)
     try:
-        payload = json.loads(content)
-        if isinstance(payload, dict):
-            # Mark the message as a hidden payload so the CLI/router can
-            # skip printing it to avoid surfacing raw JSON to the user.
+        pure_payload = json.loads(content)
+        if isinstance(pure_payload, dict):
             conversation_state["last_message_is_payload"] = True
             conversation_state = await try_book_from_json_payload(
                 content, conversation_state, dg_agent
@@ -551,6 +560,19 @@ async def process_agent_text_response(
             return conversation_state
     except (json.JSONDecodeError, ValueError):
         pass
+
+    if json_match:
+        # Mixed message — extract JSON and process booking, then handle farewell
+        json_str = json_match.group(0)
+        conversation_state["last_message_is_payload"] = True
+        conversation_state = await try_book_from_json_payload(
+            json_str, conversation_state, dg_agent
+        )
+        remaining = content.replace(json_str, "").strip()
+        if remaining and is_farewell(remaining):
+            print("---> FAREWELL DETECTED (mixed payload). Marking session for closure.")
+            conversation_state["session_should_end"] = True
+        return conversation_state
 
     # Reset the payload flag for normal text messages
     conversation_state["last_message_is_payload"] = False
