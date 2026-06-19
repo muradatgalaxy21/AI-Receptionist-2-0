@@ -65,12 +65,12 @@ async def process_audio_stream(websocket: WebSocket) -> None:
 
     # --- Connect to Deepgram ---
     log(f"Connecting to: {AGENT_URL}")
-    log(f"Using Authorization header (websockets {websockets.__version__})")
+    log(f"Using extra_headers auth (websockets {websockets.__version__})")
 
     try:
         async with websockets.connect(
             AGENT_URL,
-            additional_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"},
+            extra_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"},
             ping_interval=30,
             ping_timeout=60,
         ) as dg_agent:

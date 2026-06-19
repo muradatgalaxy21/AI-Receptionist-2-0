@@ -62,10 +62,11 @@ async def voice_chat(websocket: WebSocket):
 
     session_active = True
 
-    agent_url_with_auth = f"{AGENT_URL}?token={DEEPGRAM_API_KEY}"
-
     try:
-        async with websockets.connect(agent_url_with_auth) as dg_agent:
+        async with websockets.connect(
+            AGENT_URL,
+            extra_headers={"Authorization": f"Token {DEEPGRAM_API_KEY}"},
+        ) as dg_agent:
             await dg_agent.send(json.dumps(config))
             await websocket.send_json({"type": "connected"})
             print("[VOICE] Connected to Deepgram. Sarah is ready.")
