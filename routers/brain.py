@@ -163,6 +163,45 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     conversation_state = await process_agent_text_response(
                                         content, conversation_state, dg_agent
                                     )
+                                    # Close connection after farewell audio finishes
+                                    if conversation_state.get("session_should_end") and role == "assistant":
+                                        log("Farewell detected — closing session.")
+                                        await asyncio.sleep(3)
+                                        await dg_agent.close()
+                                        return
+
+                                elif msg_type == "FunctionCallRequest":
+                                    fn_name = msg.get("function_name", "")
+                                    fn_id   = msg.get("function_call_id", "")
+                                    fn_input = msg.get("input", {})
+                                    log(f"FUNCTION CALL: {fn_name} | args={fn_input}")
+
+                                    if fn_name == "book_appointment":
+                                        from services.agent_logic import try_book_from_json_payload
+                                        # Reuse existing booking logic via a synthetic payload
+                                        payload_str = json.dumps({
+                                            "type": "ready_to_book",
+                                            "first_name": fn_input.get("first_name", ""),
+                                            "last_name":  fn_input.get("last_name", ""),
+                                            "date":       fn_input.get("date", ""),
+                                            "time":       fn_input.get("time", ""),
+                                            "reason":     fn_input.get("reason", ""),
+                                        })
+                                        conversation_state = await try_book_from_json_payload(
+                                            payload_str, conversation_state, dg_agent
+                                        )
+                                        if conversation_state.get("booking_confirmed"):
+                                            result = "Appointment booked successfully."
+                                        else:
+                                            result = "Slot unavailable. Patient has been notified to choose another time."
+
+                                        await dg_agent.send(json.dumps({
+                                            "type": "FunctionCallResponse",
+                                            "function_call_id": fn_id,
+                                            "output": result,
+                                        }))
+                                        log(f"FunctionCallResponse sent: {result}")
+
                                 elif msg_type == "Error":
                                     log(f"ERROR from Deepgram: {response}")
                                 elif msg_type == "Warning":
