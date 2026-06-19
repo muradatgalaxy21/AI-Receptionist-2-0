@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-websockets
 deepgram-sdk
 python-dotenv
 twilio
