@@ -221,7 +221,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
 
     except websockets.exceptions.InvalidStatusCode as e:
         log(f"FATAL: Deepgram rejected connection. HTTP {e.status_code}")
-        log(f"  Headers: {dict(e.headers) if hasattr(e, 'headers') else 'N/A'}")
+        log(f"  Reason: Check Deepgram account credits and Voice Agent API access.")
         log(traceback.format_exc())
     except Exception as e:
         log(f"FATAL: Deepgram connection error: {type(e).__name__}: {e}")
