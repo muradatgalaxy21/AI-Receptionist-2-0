@@ -1,13 +1,8 @@
 # routers/brain.py
-from datetime import datetime
-# Handles the Twilio media stream WebSocket connection.
-# Bridges audio between Twilio (phone) and the Deepgram Agent API.
-# Response processing (recap extraction, booking) is delegated to
-# services.agent_logic so it can be shared with the text-test path.
-
 import json
 import base64
 import asyncio
+import traceback
 import websockets
 import os
 from datetime import datetime
@@ -21,42 +16,36 @@ DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY", "")
 AGENT_URL: str = "wss://agent.deepgram.com/v1/agent/converse"
 
 
+def log(msg: str):
+    print(f"[BRAIN] {msg}", flush=True)
+
+
 def load_agent_config() -> dict:
-    """
-    Load the agent configuration from data/config.json and inject
-    the current date/time and clinic data into the system prompt.
-    """
     with open("data/config.json", "r") as f:
         agent_config: dict = json.load(f)
 
     with open("data/data.json", "r") as f:
         clinic_data: str = f.read()
 
-    # Inject current date and time so the agent knows "today"
     current_time: str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-    
-    # Append context and clinic data
     context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
     agent_config["agent"]["think"]["prompt"] += context_str
-    print(f"Injecting time and clinic data into prompt.")
-
+    log("Config loaded. Time and clinic data injected.")
     return agent_config
 
 
 async def process_audio_stream(websocket: WebSocket) -> None:
-    """
-    Handles a Twilio media stream WebSocket session and logs call details after completion.
+    log("=" * 60)
+    log("NEW CALL SESSION STARTED")
+    log(f"websockets version: {websockets.__version__}")
 
-    Main handler for a Twilio media stream WebSocket session.
-    1. Connects to Deepgram Agent API with the loaded config.
-    2. Runs two async tasks in parallel:
-       - send_mic_audio: forwards Twilio audio to Deepgram
-       - receive_agent_audio: forwards Deepgram responses back to Twilio
-    3. Response text processing is delegated to the shared agent_logic module.
-    """
-    # Record start time of the call for duration calculation
+    # --- API Key Check ---
+    if not DEEPGRAM_API_KEY:
+        log("FATAL: DEEPGRAM_API_KEY is not set in environment!")
+        return
+    log(f"DEEPGRAM_API_KEY loaded. Length={len(DEEPGRAM_API_KEY)}, Starts with: {DEEPGRAM_API_KEY[:8]}...")
+
     start_time: datetime = datetime.utcnow()
-
     conversation_state: dict = {
         "first_name": None,
         "last_name": None,
@@ -65,22 +54,18 @@ async def process_audio_stream(websocket: WebSocket) -> None:
         "reason": None
     }
 
-    if not DEEPGRAM_API_KEY:
-        print("Error: DEEPGRAM_API_KEY is missing from .env file")
-        return
-
-    headers: dict = {"Authorization": f"Token {DEEPGRAM_API_KEY}"}
-
-    # Load Config
+    # --- Load Config ---
     try:
         agent_config: dict = load_agent_config()
+        log(f"Config keys: {list(agent_config.keys())}")
     except Exception as e:
-        print(f"Config Error: {e}")
+        log(f"FATAL: Config load failed: {e}")
+        log(traceback.format_exc())
         return
 
-    # Pass auth token in URL — avoids any websockets version header issues
+    # --- Connect to Deepgram ---
     agent_url_with_auth = f"{AGENT_URL}?token={DEEPGRAM_API_KEY}"
-    print(f"Connecting to Deepgram Agent (websockets=={websockets.__version__})")
+    log(f"Connecting to: {AGENT_URL}?token=***")
 
     try:
         async with websockets.connect(
@@ -88,122 +73,158 @@ async def process_audio_stream(websocket: WebSocket) -> None:
             ping_interval=30,
             ping_timeout=60,
         ) as dg_agent:
-            await dg_agent.send(json.dumps(agent_config))
-            print("CONNECTION SUCCESS! Sarah is listening...")
+            log("SUCCESS: Connected to Deepgram Agent API!")
+
+            # --- Send config ---
+            try:
+                config_str = json.dumps(agent_config)
+                await dg_agent.send(config_str)
+                log(f"Config sent to Deepgram ({len(config_str)} bytes)")
+            except Exception as e:
+                log(f"ERROR sending config: {e}")
+                log(traceback.format_exc())
+                return
 
             stream_sid: str = None
+            twilio_msg_count: int = 0
+            dg_msg_count: int = 0
 
-            # --- SENDER (Phone -> AI) ---
-            # Reads audio frames from Twilio WebSocket and forwards to Deepgram
+            # --- SENDER: Twilio → Deepgram ---
             async def send_mic_audio() -> None:
-                nonlocal stream_sid
+                nonlocal stream_sid, twilio_msg_count
+                log("SENDER task started (Twilio → Deepgram)")
                 try:
                     while True:
-                        message: str = await websocket.receive_text()
-                        data: dict = json.loads(message)
-                        if data["event"] == "start":
+                        raw = await websocket.receive_text()
+                        data: dict = json.loads(raw)
+                        event = data.get("event", "unknown")
+
+                        if event == "start":
                             stream_sid = data["start"]["streamSid"]
-                        elif data["event"] == "media":
-                            # Decode base64 audio payload from Twilio
-                            audio_bytes: bytes = base64.b64decode(
-                                data["media"]["payload"]
-                            )
+                            log(f"Twilio stream STARTED. streamSid={stream_sid}")
+
+                        elif event == "media":
+                            twilio_msg_count += 1
+                            if twilio_msg_count == 1:
+                                log("First audio frame received from Twilio — forwarding to Deepgram")
+                            audio_bytes: bytes = base64.b64decode(data["media"]["payload"])
                             try:
                                 await dg_agent.send(audio_bytes)
-                            except Exception:
-                                pass
-                        elif data["event"] == "stop":
-                            break
-                except Exception:
-                    pass
+                            except Exception as e:
+                                log(f"ERROR forwarding audio to Deepgram: {e}")
+                                log(traceback.format_exc())
+                                break
 
-            # --- RECEIVER (AI -> Phone) ---
-            # Reads responses from Deepgram and sends audio back to Twilio
+                        elif event == "stop":
+                            log(f"Twilio stream STOPPED. Total audio frames sent: {twilio_msg_count}")
+                            break
+
+                        else:
+                            log(f"Unknown Twilio event: {event}")
+
+                except Exception as e:
+                    log(f"ERROR in send_mic_audio: {e}")
+                    log(traceback.format_exc())
+
+            # --- RECEIVER: Deepgram → Twilio ---
             async def receive_agent_audio() -> None:
-                nonlocal conversation_state
+                nonlocal conversation_state, dg_msg_count
+                log("RECEIVER task started (Deepgram → Twilio)")
                 try:
                     while True:
                         response = await dg_agent.recv()
+                        dg_msg_count += 1
 
-                        # 1. Handle Audio (Binary) -- forward to Twilio
                         if isinstance(response, bytes):
+                            if dg_msg_count <= 3:
+                                log(f"Audio bytes received from Deepgram ({len(response)} bytes) — forwarding to Twilio")
                             if stream_sid:
                                 media_message: dict = {
                                     "event": "media",
                                     "streamSid": stream_sid,
                                     "media": {
-                                        "payload": base64.b64encode(
-                                            response
-                                        ).decode("utf-8")
+                                        "payload": base64.b64encode(response).decode("utf-8")
                                     }
                                 }
-                                await websocket.send_text(
-                                    json.dumps(media_message)
-                                )
-
-                        # 2. Handle Text (JSON) -- process via shared logic
+                                await websocket.send_text(json.dumps(media_message))
+                            else:
+                                log("WARNING: Got audio from Deepgram but stream_sid is not set yet!")
                         else:
-                            msg: dict = json.loads(response)
+                            try:
+                                msg: dict = json.loads(response)
+                                msg_type = msg.get("type", "unknown")
+                                log(f"Deepgram message #{dg_msg_count}: type={msg_type}")
 
-                            if msg.get("type") == "ConversationText":
-                                content: str = msg.get("content", "")
-                                # Delegate all response processing to the shared module
-                                conversation_state = await process_agent_text_response(
-                                    content, conversation_state, dg_agent
-                                )
+                                if msg_type == "ConversationText":
+                                    content: str = msg.get("content", "")
+                                    role: str = msg.get("role", "unknown")
+                                    log(f"  [{role}]: {content[:120]}")
+                                    conversation_state = await process_agent_text_response(
+                                        content, conversation_state, dg_agent
+                                    )
+                                elif msg_type == "Error":
+                                    log(f"ERROR from Deepgram: {response}")
+                                elif msg_type == "Warning":
+                                    log(f"WARNING from Deepgram: {response}")
+                                else:
+                                    log(f"  Full message: {response[:300]}")
+                            except json.JSONDecodeError as e:
+                                log(f"Failed to parse Deepgram text response: {e} | raw={response[:200]}")
 
                 except Exception as e:
-                    print(f"Agent Receiver Error: {e}")
+                    log(f"ERROR in receive_agent_audio: {e}")
+                    log(traceback.format_exc())
 
-            # Run both tasks concurrently
+            # --- Run both tasks ---
+            log("Starting sender and receiver tasks...")
             tasks = [
                 asyncio.create_task(send_mic_audio()),
                 asyncio.create_task(receive_agent_audio())
             ]
 
-            done, pending = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
-            )
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+            for task in done:
+                if task.exception():
+                    log(f"Task failed with exception: {task.exception()}")
+
             for task in pending:
                 task.cancel()
 
-            # Calculate call metrics and log them
-            from services.call_logger import append_call_log
-            import uuid
-            end_time: datetime = datetime.utcnow()
-            call_duration: float = (end_time - start_time).total_seconds()
-            
-            # Extract patient name if available
-            patient_name: str = ""
-            if conversation_state.get("first_name") and conversation_state.get("last_name"):
-                patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
-                
-            # Determine intent based on whether a booking was confirmed
-            intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
-            status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Follow-up Needed"
-            
-            # Placeholder estimated value – could be derived from business logic
-            estimated_value: float = 100.0 if conversation_state.get("booking_confirmed") else 0.0
-            
-            # Recording URL – TBD, placeholder for now
-            recording_url: str = ""
-            # Caller ID – not available in current context, set to unknown
-            caller_id: str = "unknown"
-            # Timestamp for CSV entry
-            timestamp: str = end_time.isoformat()
-            
-            # Append to CSV
-            append_call_log(
-                timestamp=timestamp,
-                caller_id=caller_id,
-                patient_name=patient_name,
-                call_duration=call_duration,
-                intent=intent,
-                summary=conversation_state.get("last_summary", ""),
-                status=status,
-                estimated_value=estimated_value,
-                recording_url=recording_url,
-            )
+            log(f"Call session ended. Twilio frames={twilio_msg_count}, Deepgram msgs={dg_msg_count}")
 
+            # --- Log call to CSV ---
+            try:
+                from services.call_logger import append_call_log
+                end_time: datetime = datetime.utcnow()
+                call_duration: float = (end_time - start_time).total_seconds()
+                patient_name: str = ""
+                if conversation_state.get("first_name") and conversation_state.get("last_name"):
+                    patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
+                intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
+                status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Follow-up Needed"
+                append_call_log(
+                    timestamp=end_time.isoformat(),
+                    caller_id="unknown",
+                    patient_name=patient_name,
+                    call_duration=call_duration,
+                    intent=intent,
+                    summary=conversation_state.get("last_summary", ""),
+                    status=status,
+                    estimated_value=100.0 if conversation_state.get("booking_confirmed") else 0.0,
+                    recording_url="",
+                )
+                log(f"Call logged. Duration={call_duration:.1f}s, Patient={patient_name or 'unknown'}")
+            except Exception as e:
+                log(f"ERROR logging call: {e}")
+                log(traceback.format_exc())
+
+    except websockets.exceptions.InvalidStatusCode as e:
+        log(f"FATAL: Deepgram rejected connection. HTTP {e.status_code}")
+        log(f"  Headers: {dict(e.headers) if hasattr(e, 'headers') else 'N/A'}")
+        log(traceback.format_exc())
     except Exception as e:
-        print(f"Connection Error: {e}")
+        log(f"FATAL: Deepgram connection error: {type(e).__name__}: {e}")
+        log(traceback.format_exc())
+
+    log("=" * 60)
