@@ -171,29 +171,50 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                         return
 
                                 elif msg_type == "FunctionCallRequest":
-                                    fn_name = msg.get("function_name", "")
-                                    fn_id   = msg.get("function_call_id", "")
+                                    fn_name  = msg.get("function_name", "")
+                                    fn_id    = msg.get("function_call_id", "")
                                     fn_input = msg.get("input", {})
                                     log(f"FUNCTION CALL: {fn_name} | args={fn_input}")
 
                                     if fn_name == "book_appointment":
-                                        from services.agent_logic import try_book_from_json_payload
-                                        # Reuse existing booking logic via a synthetic payload
-                                        payload_str = json.dumps({
-                                            "type": "ready_to_book",
-                                            "first_name": fn_input.get("first_name", ""),
-                                            "last_name":  fn_input.get("last_name", ""),
-                                            "date":       fn_input.get("date", ""),
-                                            "time":       fn_input.get("time", ""),
-                                            "reason":     fn_input.get("reason", ""),
+                                        from services.database import book_appointment as db_book_appt
+                                        from services.tools import parse_date, check_availability, get_available_slots_tool
+
+                                        first_name = fn_input.get("first_name", "")
+                                        last_name  = fn_input.get("last_name", "")
+                                        date_str   = fn_input.get("date", "")
+                                        time_str   = fn_input.get("time", "")
+                                        reason     = fn_input.get("reason", "")
+
+                                        conversation_state.update({
+                                            "first_name": first_name,
+                                            "last_name": last_name,
+                                            "appointment_date": date_str,
+                                            "appointment_time": time_str,
+                                            "reason": reason,
                                         })
-                                        conversation_state = await try_book_from_json_payload(
-                                            payload_str, conversation_state, dg_agent
-                                        )
-                                        if conversation_state.get("booking_confirmed"):
-                                            result = "Appointment booked successfully."
+
+                                        real_date = parse_date(date_str)
+                                        if check_availability(real_date, time_str):
+                                            success = db_book_appt(first_name, last_name, real_date, time_str, reason)
+                                            if success:
+                                                conversation_state["booking_confirmed"] = True
+                                                result = (
+                                                    f"Appointment confirmed. Booked for {first_name} {last_name} "
+                                                    f"on {real_date} at {time_str} for {reason}. "
+                                                    f"Now say a warm goodbye to the patient."
+                                                )
+                                                log(f"Booking confirmed: {first_name} {last_name} {real_date} {time_str}")
+                                            else:
+                                                result = "Booking failed due to a system error. Let the patient know and apologise."
                                         else:
-                                            result = "Slot unavailable. Patient has been notified to choose another time."
+                                            free_slots = get_available_slots_tool(real_date)
+                                            slots_str  = ", ".join(free_slots) if free_slots else "no available slots"
+                                            result = (
+                                                f"That slot is unavailable. Available times on {real_date}: {slots_str}. "
+                                                f"Ask the patient to choose another time."
+                                            )
+                                            log(f"Slot unavailable: {real_date} {time_str}. Free: {slots_str}")
 
                                         await dg_agent.send(json.dumps({
                                             "type": "FunctionCallResponse",
