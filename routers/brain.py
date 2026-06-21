@@ -111,6 +111,8 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                             audio_bytes: bytes = base64.b64decode(data["media"]["payload"])
                             try:
                                 await dg_agent.send(audio_bytes)
+                            except websockets.exceptions.ConnectionClosedOK:
+                                break
                             except Exception as e:
                                 log(f"ERROR forwarding audio to Deepgram: {e}")
                                 log(traceback.format_exc())
