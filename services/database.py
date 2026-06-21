@@ -44,8 +44,29 @@ def init_db():
     conn.close()
     print("Database initialized.")
 
+def _valid_clinic_slots_for(date: str) -> list:
+    """Return the list of valid slot strings for a given YYYY-MM-DD date.
+    Returns [] for Sundays (closed) or unparseable dates."""
+    try:
+        day_of_week = datetime.strptime(date, "%Y-%m-%d").strftime("%A")
+    except (ValueError, TypeError):
+        return []
+    if day_of_week == "Sunday":
+        return []
+    if day_of_week == "Saturday":
+        return ["09:00", "10:00", "11:00", "12:00"]
+    return ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+
+
 def is_slot_available(date, time):
     clean_time = normalize_time(time)
+    valid_slots = _valid_clinic_slots_for(date)
+    if not valid_slots:
+        print(f"Slot {date} {clean_time} rejected — clinic closed that day.")
+        return False
+    if clean_time not in valid_slots:
+        print(f"Slot {date} {clean_time} rejected — not a valid clinic slot.")
+        return False
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
@@ -63,9 +84,16 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
     """
     Atomically checks slot availability and inserts the booking in one transaction
     to prevent double-booking under concurrent requests.
-    Returns True on success, False if slot is taken or on error.
+    Returns True on success, False if slot is taken, invalid, or on error.
     """
     clean_time = normalize_time(appointment_time)
+    valid_slots = _valid_clinic_slots_for(appointment_date)
+    if not valid_slots:
+        print(f"Booking rejected — clinic closed on {appointment_date}.")
+        return False
+    if clean_time not in valid_slots:
+        print(f"Booking rejected — {clean_time} is not a valid slot on {appointment_date}.")
+        return False
     conn = sqlite3.connect(DB_NAME)
     try:
         # BEGIN IMMEDIATE acquires a write lock upfront so no other

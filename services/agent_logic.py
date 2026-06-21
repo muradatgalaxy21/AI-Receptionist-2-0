@@ -77,6 +77,12 @@ def _extract_date_from_user_text(text: str) -> Optional[str]:
     """
     text_lower: str = text.lower().strip()
 
+    # If the patient is referring to a past event ("last Monday", "last week"),
+    # don't extract a date — we'd compute the wrong future date and offer slots
+    # the patient never asked about.
+    if re.search(r'\blast\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month)\b', text_lower):
+        return None
+
     # Explicit date patterns: 21-05-2026 / 21/05/2026 / May 21 / 21st May etc.
     explicit_pattern = re.search(
         r"(\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{4}[-/]\d{1,2}[-/]\d{1,2}"
