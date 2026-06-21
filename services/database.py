@@ -80,16 +80,12 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
 
 
 def get_available_slots(date: str) -> list:
-    """
-    Returns a list of available time slots for a given date.
-    1. Determines slot range based on day of week (Saturday is half-day).
-    2. Queries the DB for already-booked slots on that date.
-    3. Returns only the slots that are NOT booked.
-    """
+    if not date:
+        return []
     try:
         day_of_week: str = datetime.strptime(date, "%Y-%m-%d").strftime("%A")
-    except ValueError:
-        day_of_week = "Monday"
+    except (ValueError, TypeError):
+        return []
 
     # Saturday is half-day 9am-1pm; Sunday is closed; Mon-Fri last slot at 5pm
     if day_of_week == "Sunday":

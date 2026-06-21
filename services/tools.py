@@ -49,6 +49,8 @@ def check_availability(date: str, time: str) -> bool:
 
 def get_available_slots_tool(date: str):
     real_date = parse_date(date)
+    if not real_date:
+        return []
     return database.get_available_slots(real_date)
 
 

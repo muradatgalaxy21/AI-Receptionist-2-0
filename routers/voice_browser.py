@@ -193,9 +193,23 @@ async def voice_chat(websocket: WebSocket):
                 except asyncio.CancelledError:
                     pass
 
+            async def send_keepalive():
+                try:
+                    while session_active:
+                        await asyncio.sleep(10)
+                        if not session_active:
+                            break
+                        try:
+                            await dg_agent.send(json.dumps({"type": "KeepAlive"}))
+                        except Exception:
+                            break
+                except asyncio.CancelledError:
+                    pass
+
             tasks = [
                 asyncio.create_task(receive_from_browser()),
                 asyncio.create_task(receive_from_deepgram()),
+                asyncio.create_task(send_keepalive()),
             ]
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             session_active = False

@@ -38,6 +38,13 @@ def _to_12h(slot: str) -> str:
         return slot
 
 
+def _ordinal(n: int) -> str:
+    """Return a number with the correct English ordinal suffix (1st, 2nd, 3rd, 4th…)."""
+    if 11 <= n % 100 <= 13:
+        return f"{n}th"
+    return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
+
 def _extract_date_from_user_text(text: str) -> Optional[str]:
     """
     Try to extract a date reference from the user's raw message.
@@ -80,14 +87,15 @@ async def handle_date_selection_in_booking(
     dg_agent: Any
 ) -> bool:
     """
-    Proactively inject real available slots whenever the user mentions a date.
-    This fires BEFORE Sarah asks 'what time?', so the user is told which slots 
-    exist rather than having to guess.
-
-    1. Looks for a date reference in the user's message.
-    2. Queries the DB for free slots on that date.
-    3. Injects the slot list (or a fully-booked notice) as a SYSTEM message.
+    Proactively inject real available slots whenever the user mentions a date
+    AND we are already in a booking flow (i.e. we have the patient's name).
+    This prevents Sarah from offering appointment slots when the user mentions
+    any date in passing (e.g. "I had a filling last Monday").
     """
+    # Only inject slot data if we've started the booking flow (have patient name)
+    if not conversation_state.get("first_name"):
+        return False
+
     # Try to extract a date from what the user just said
     target_date: Optional[str] = _extract_date_from_user_text(user_text)
     if not target_date:
@@ -151,7 +159,7 @@ async def handle_user_slot_query(
 
         if available_dates:
             summaries = [
-                f"{d['day']} the {d['date'].split('-')[2].lstrip('0')}th"
+                f"{d['day']} the {_ordinal(int(d['date'].split('-')[2]))}"
                 for d in available_dates[:5]
             ]
             if len(summaries) == 1:

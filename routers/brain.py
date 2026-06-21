@@ -192,6 +192,10 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     fn_input = msg.get("input", {})
                                     log(f"FUNCTION CALL: {fn_name} | args={fn_input}")
 
+                                    # Default result — handles any unexpected function name
+                                    # so Deepgram never hangs waiting for a response.
+                                    result = f"Function '{fn_name}' is not available."
+
                                     if fn_name == "book_appointment":
                                         from services.database import book_appointment as db_book_appt
                                         from services.tools import parse_date, check_availability, get_available_slots_tool
@@ -247,12 +251,12 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                                 )
                                                 log(f"Slot unavailable: {real_date} {time_str}. Free: {slots_str}")
 
-                                        await dg_agent.send(json.dumps({
-                                            "type": "FunctionCallResponse",
-                                            "function_call_id": fn_id,
-                                            "output": result,
-                                        }))
-                                        log(f"FunctionCallResponse sent: {result[:100]}")
+                                    await dg_agent.send(json.dumps({
+                                        "type": "FunctionCallResponse",
+                                        "function_call_id": fn_id,
+                                        "output": result,
+                                    }))
+                                    log(f"FunctionCallResponse sent: {result[:100]}")
 
                                 elif msg_type == "AgentAudioDone":
                                     if farewell_pending:
