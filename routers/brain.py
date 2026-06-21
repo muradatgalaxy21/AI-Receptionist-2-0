@@ -9,7 +9,11 @@ from datetime import datetime
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 from dotenv import load_dotenv
-from services.agent_logic import process_agent_text_response
+from services.agent_logic import (
+    process_agent_text_response,
+    handle_user_slot_query,
+    handle_date_selection_in_booking,
+)
 
 load_dotenv()
 
@@ -168,12 +172,19 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     content: str = msg.get("content", "")
                                     role: str = msg.get("role", "unknown")
                                     log(f"  [{role}]: {content[:120]}")
-                                    conversation_state = await process_agent_text_response(
-                                        content, conversation_state, dg_agent
-                                    )
-                                    if conversation_state.get("session_should_end") and role == "assistant":
-                                        log("Farewell detected — waiting for AgentAudioDone to close.")
-                                        farewell_pending = True
+
+                                    if role == "user":
+                                        # Inject real-time slot data when user mentions dates or asks about availability
+                                        handled = await handle_user_slot_query(content, conversation_state, dg_agent)
+                                        if not handled:
+                                            await handle_date_selection_in_booking(content, conversation_state, dg_agent)
+                                    elif role == "assistant":
+                                        conversation_state = await process_agent_text_response(
+                                            content, conversation_state, dg_agent
+                                        )
+                                        if conversation_state.get("session_should_end"):
+                                            log("Farewell detected — waiting for AgentAudioDone to close.")
+                                            farewell_pending = True
 
                                 elif msg_type == "FunctionCallRequest":
                                     fn_name  = msg.get("function_name", "")
@@ -267,11 +278,28 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                     log(f"ERROR in receive_agent_audio: {e}")
                     log(traceback.format_exc())
 
-            # --- Run both tasks concurrently ---
+            # --- KEEPALIVE: prevents Deepgram from closing idle connections ---
+            async def send_keepalive() -> None:
+                try:
+                    while True:
+                        await asyncio.sleep(10)
+                        try:
+                            await dg_agent.send(json.dumps({"type": "KeepAlive"}))
+                        except (websockets.exceptions.ConnectionClosedOK,
+                                websockets.exceptions.ConnectionClosedError):
+                            break
+                        except Exception as e:
+                            log(f"Keepalive error: {e}")
+                            break
+                except asyncio.CancelledError:
+                    pass
+
+            # --- Run all tasks concurrently ---
             log("Starting sender and receiver tasks...")
             tasks = [
                 asyncio.create_task(send_mic_audio()),
                 asyncio.create_task(receive_agent_audio()),
+                asyncio.create_task(send_keepalive()),
             ]
 
             done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)

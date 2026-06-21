@@ -43,16 +43,9 @@ def parse_date(date_str: str):
         print(f"Date Parse Error: {e}")
         return date_str  # Return original string if we can't parse it
 
-def check_availability(date: str, time: str = None):
-    print(f"Checking availability for {date} (Time: {time})...")
+def check_availability(date: str, time: str) -> bool:
     real_date = parse_date(date)
-    print(f"   -> Converted '{date}' to '{real_date}'")
-
-    if not time or "all" in time.lower() or "any" in time.lower():
-        return "The available times are 12:00 PM, 2:00 PM, and 4:00 PM."
-
-    available = database.is_slot_available(real_date, time)
-    return available
+    return database.is_slot_available(real_date, time)
 
 def get_available_slots_tool(date: str):
     real_date = parse_date(date)

@@ -145,10 +145,13 @@ async def voice_chat(websocket: WebSocket):
                                         injected = await handle_date_selection_in_booking(content, conversation_state, dg_agent)
                                         if injected:
                                             conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
+                                else:
+                                    # Only run agent logic processing on assistant messages to avoid
+                                    # farewell detection or JSON parsing triggering on user speech.
+                                    conversation_state = await process_agent_text_response(
+                                        content, conversation_state, dg_agent
+                                    )
 
-                                conversation_state = await process_agent_text_response(
-                                    content, conversation_state, dg_agent
-                                )
                                 is_payload = conversation_state.get("last_message_is_payload", False)
                                 is_system = content.strip().startswith("[SYSTEM]")
                                 if not is_payload and not is_system:

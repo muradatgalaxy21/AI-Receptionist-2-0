@@ -169,45 +169,41 @@ async def text_chat(websocket: WebSocket) -> None:
                             content: str = msg.get("content", "")
                             role: str = msg.get("role", "assistant")
 
-                            # Process through shared agent logic
-                            # (recap extraction, availability check, booking)
-                            try:
-                                conversation_state = await process_agent_text_response(
-                                    content, conversation_state, dg_agent
-                                )
-                            except Exception as e:
-                                print(f"[TEXT-TEST] Agent logic error: {e}")
-
-                            # Forward the agent's text response to the client.
-                            # Skip if the message was a hidden JSON payload (e.g. ready_to_book).
-                            # Such payloads are processed by agent_logic and must not reach the UI.
-                            is_payload: bool = conversation_state.get("last_message_is_payload", False)
-                            if role == "assistant" and not is_payload:
+                            if role == "assistant":
+                                # Only process agent logic for assistant messages.
+                                # Running it on user-role echoes could falsely trigger
+                                # farewell detection if the user said 'goodbye' etc.
                                 try:
-                                    await websocket.send_json({
-                                        "role": "assistant",
-                                        "content": content
-                                    })
-                                    logger.log("SARAH", content)
-                                except Exception:
-                                    # Client disconnected while we were sending
-                                    session_active = False
-                                    return
+                                    conversation_state = await process_agent_text_response(
+                                        content, conversation_state, dg_agent
+                                    )
+                                except Exception as e:
+                                    print(f"[TEXT-TEST] Agent logic error: {e}")
 
-                                # Check if the agent just said goodbye.
-                                # Give the browser a moment to display the farewell
-                                # message, then send a session_ended signal so the
-                                # UI can return to the welcome screen gracefully.
-                                if conversation_state.get("session_should_end"):
-                                    print("[TEXT-TEST] Farewell detected. Closing session.")
-                                    logger.log_event("Session ended by agent farewell")
-                                    await asyncio.sleep(1.5)
+                                # Forward the agent's text response to the client.
+                                # Skip if the message was a hidden JSON payload (e.g. ready_to_book).
+                                is_payload: bool = conversation_state.get("last_message_is_payload", False)
+                                if not is_payload:
                                     try:
-                                        await websocket.send_json({"role": "session_ended"})
+                                        await websocket.send_json({
+                                            "role": "assistant",
+                                            "content": content
+                                        })
+                                        logger.log("SARAH", content)
                                     except Exception:
-                                        pass
-                                    session_active = False
-                                    return
+                                        session_active = False
+                                        return
+
+                                    if conversation_state.get("session_should_end"):
+                                        print("[TEXT-TEST] Farewell detected. Closing session.")
+                                        logger.log_event("Session ended by agent farewell")
+                                        await asyncio.sleep(1.5)
+                                        try:
+                                            await websocket.send_json({"role": "session_ended"})
+                                        except Exception:
+                                            pass
+                                        session_active = False
+                                        return
 
                         elif msg_type == "UserStartedSpeaking":
                             # Text mode: this fires when InjectUserMessage is sent

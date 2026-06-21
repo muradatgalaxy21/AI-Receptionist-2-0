@@ -60,12 +60,7 @@ def is_slot_available(date, time):
     return count == 0
 
 def book_appointment(first_name, last_name, appointment_date, appointment_time, reason):
-    print("book_appointment() CALLED")
     clean_time = normalize_time(appointment_time)
-    
-    """
-    Saves the appointment to the database.
-    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     try:
