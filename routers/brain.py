@@ -59,6 +59,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
         "booking_confirmed": False,
         "session_should_end": False,
         "last_message_is_payload": False,
+        "_pending_echoes": 0,
     }
 
     try:
@@ -184,10 +185,21 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     log(f"  [{role}]: {content[:120]}")
 
                                     if role == "user":
-                                        # Inject real-time slot data when user mentions dates or asks about availability
-                                        handled = await handle_user_slot_query(content, conversation_state, dg_agent)
-                                        if not handled:
-                                            await handle_date_selection_in_booking(content, conversation_state, dg_agent)
+                                        # Deepgram echoes every InjectUserMessage back as a role="user"
+                                        # ConversationText. Skip those echoes so they don't re-trigger
+                                        # slot injection (which would cause Sarah to repeat slot data).
+                                        pending_echoes = conversation_state.get("_pending_echoes", 0)
+                                        if pending_echoes > 0:
+                                            conversation_state["_pending_echoes"] = pending_echoes - 1
+                                            log(f"Skipping injection echo (remaining={pending_echoes - 1})")
+                                        else:
+                                            handled = await handle_user_slot_query(content, conversation_state, dg_agent)
+                                            if handled:
+                                                conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
+                                            else:
+                                                injected = await handle_date_selection_in_booking(content, conversation_state, dg_agent)
+                                                if injected:
+                                                    conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
                                     elif role == "assistant":
                                         conversation_state = await process_agent_text_response(
                                             content, conversation_state, dg_agent
