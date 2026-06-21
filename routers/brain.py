@@ -108,7 +108,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                         event = data.get("event", "unknown")
 
                         if event == "start":
-                            stream_sid = data["start"]["streamSid"]
+                            stream_sid = data.get("start", {}).get("streamSid")
                             log(f"Twilio stream STARTED. streamSid={stream_sid}")
 
                         elif event == "media":
@@ -196,7 +196,9 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                 elif msg_type == "FunctionCallRequest":
                                     fn_name  = msg.get("function_name", "")
                                     fn_id    = msg.get("function_call_id", "")
-                                    fn_input = msg.get("input", {})
+                                    fn_input = msg.get("input") or {}
+                                    if not isinstance(fn_input, dict):
+                                        fn_input = {}
                                     log(f"FUNCTION CALL: {fn_name} | args={fn_input}")
 
                                     # Default result — handles any unexpected function name

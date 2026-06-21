@@ -92,8 +92,10 @@ async def handle_date_selection_in_booking(
     This prevents Sarah from offering appointment slots when the user mentions
     any date in passing (e.g. "I had a filling last Monday").
     """
-    # Only inject slot data if we've started the booking flow (have patient name)
+    # Only inject slot data if we're in an active booking flow (have name, not yet confirmed)
     if not conversation_state.get("first_name"):
+        return False
+    if conversation_state.get("booking_confirmed"):
         return False
 
     # Try to extract a date from what the user just said
@@ -232,33 +234,21 @@ async def handle_user_slot_query(
     return True
 
 
-# Farewell phrases that signal the agent intends to end the call.
-# When any of these appear in the agent's text the session should close.
+# Farewell phrases — only ones that are unambiguous end-of-call signals.
+# Removed "take care" / "see you soon" / "have a wonderful" because they
+# can appear naturally mid-conversation ("We'll take care of that for you",
+# "See you soon at your appointment", "Hope you have a wonderful smile").
 FAREWELL_PHRASES: list = [
     "goodbye",
     "good bye",
     "have a great day",
-    "take care",
     "thank you for calling",
     "thank you, goodbye",
     "thank you. goodbye",
-    "see you soon",
-    "have a wonderful",
 ]
 
 
 def is_farewell(content: str) -> bool:
-    """
-    Return True if the agent's message contains a recognisable farewell phrase.
-    1. Normalises the content to lowercase.
-    2. Checks against the FAREWELL_PHRASES list.
-
-    Args:
-        content: The agent's spoken text.
-
-    Returns:
-        True if a farewell phrase is present, False otherwise.
-    """
     lowered: str = content.lower()
     return any(phrase in lowered for phrase in FAREWELL_PHRASES)
 
@@ -561,7 +551,9 @@ async def process_agent_text_response(
     json_match = re.search(r'\{[^{}]*"type"\s*:\s*"ready_to_book"[^{}]*\}', content, re.DOTALL)
     try:
         pure_payload = json.loads(content)
-        if isinstance(pure_payload, dict):
+        # Only treat as a booking payload if it's specifically a ready_to_book dict.
+        # Any other valid JSON dict (e.g. debug output) must not be suppressed.
+        if isinstance(pure_payload, dict) and pure_payload.get("type") == "ready_to_book":
             conversation_state["last_message_is_payload"] = True
             conversation_state = await try_book_from_json_payload(
                 content, conversation_state, dg_agent
