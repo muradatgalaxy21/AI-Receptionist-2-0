@@ -199,7 +199,7 @@ async def text_chat(websocket: WebSocket) -> None:
                                         logger.log_event("Session ended by agent farewell")
                                         await asyncio.sleep(1.5)
                                         try:
-                                            await websocket.send_json({"role": "session_ended"})
+                                            await websocket.send_json({"type": "session_ended"})
                                         except Exception:
                                             pass
                                         session_active = False

@@ -23,7 +23,7 @@
             "properties": {
               "first_name": { "type": "string", "description": "Patient first name" },
               "last_name":  { "type": "string", "description": "Patient last name" },
-              "date":       { "type": "string", "description": "Appointment date in dd-mm-yyyy format" },
+              "date":       { "type": "string", "description": "Appointment date in YYYY-MM-DD format, e.g. 2026-07-15" },
               "time":       { "type": "string", "description": "Appointment time e.g. 09:00 AM" },
               "reason":     { "type": "string", "description": "Reason for visit" }
             },

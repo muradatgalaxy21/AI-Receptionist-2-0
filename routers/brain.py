@@ -56,6 +56,9 @@ async def process_audio_stream(websocket: WebSocket) -> None:
         "appointment_date": None,
         "appointment_time": None,
         "reason": None,
+        "booking_confirmed": False,
+        "session_should_end": False,
+        "last_message_is_payload": False,
     }
 
     try:
@@ -97,7 +100,11 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                 try:
                     while True:
                         raw = await websocket.receive_text()
-                        data: dict = json.loads(raw)
+                        try:
+                            data: dict = json.loads(raw)
+                        except json.JSONDecodeError as e:
+                            log(f"Invalid JSON from Twilio: {e}")
+                            continue
                         event = data.get("event", "unknown")
 
                         if event == "start":

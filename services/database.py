@@ -48,31 +48,47 @@ def is_slot_available(date, time):
     clean_time = normalize_time(time)
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Check if a slot is taken on a specific DATE and TIME
-    cursor.execute('''
-        SELECT count(*) FROM appointments 
-        WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'
-    ''', (date, clean_time))
+    cursor.execute(
+        "SELECT count(*) FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'",
+        (date, clean_time)
+    )
     count = cursor.fetchone()[0]
     conn.close()
     if count > 0:
         print(f"Slot {date} {clean_time} is BUSY.")
     return count == 0
 
+
 def book_appointment(first_name, last_name, appointment_date, appointment_time, reason):
+    """
+    Atomically checks slot availability and inserts the booking in one transaction
+    to prevent double-booking under concurrent requests.
+    Returns True on success, False if slot is taken or on error.
+    """
     clean_time = normalize_time(appointment_time)
     conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
     try:
-        # Fixed: Now uses the correct column names matching init_db
-        cursor.execute('''
-            INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (first_name, last_name, appointment_date, clean_time, reason))
+        # BEGIN IMMEDIATE acquires a write lock upfront so no other
+        # connection can insert the same slot between our check and insert.
+        conn.execute("BEGIN IMMEDIATE")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT count(*) FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'",
+            (appointment_date, clean_time)
+        )
+        if cursor.fetchone()[0] > 0:
+            conn.rollback()
+            print(f"Slot {appointment_date} {clean_time} was taken by another booking.")
+            return False
+        cursor.execute(
+            "INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)",
+            (first_name, last_name, appointment_date, clean_time, reason)
+        )
         conn.commit()
         print(f"Booking saved for {first_name} {last_name} at {appointment_date} {clean_time}")
         return True
     except Exception as e:
+        conn.rollback()
         print(f"Error booking: {e}")
         return False
     finally:

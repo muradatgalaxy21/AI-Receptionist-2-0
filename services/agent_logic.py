@@ -471,8 +471,10 @@ async def try_book_from_json_payload(
         print(f"DEBUG: Final availability check passed ({is_available}). Proceeding.")
         print("--> All fields present & Slot Available. Booking now...")
 
-        # Use parsed date for storage consistency
         real_date: str = parse_date(appt_date)
+        if not real_date:
+            print(f"--> Date parse failed for '{appt_date}'. Cannot book.")
+            return conversation_state
 
         success: bool = book_appointment(
             conversation_state["first_name"],
@@ -502,7 +504,6 @@ async def try_book_from_json_payload(
                 print(f"Error sending confirmation: {e}")
 
             conversation_state["booking_confirmed"] = True
-            conversation_state["waiting_for_final_response"] = True
     else:
         print(f"DEBUG: Final availability check failed ({is_available}).")
         print("--> SLOT UNAVAILABLE (Final Check). Reporting back...")

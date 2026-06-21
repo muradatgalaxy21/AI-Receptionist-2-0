@@ -41,7 +41,7 @@ def parse_date(date_str: str):
         return parsed_date.strftime("%Y-%m-%d")
     except Exception as e:
         print(f"Date Parse Error: {e}")
-        return date_str  # Return original string if we can't parse it
+        return None
 
 def check_availability(date: str, time: str) -> bool:
     real_date = parse_date(date)
