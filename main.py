@@ -52,8 +52,8 @@ app.include_router(voice_browser.router)
 # 1c. Serve static files (browser test chat page)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 2. Register the Health Check
-@app.get("/")
+# 2. Register the Health Check (GET + HEAD for Render's health pings)
+@app.api_route("/", methods=["GET", "HEAD"])
 async def health_check():
     return {"status": "AI Receptionist is Fully Operational"}
 
