@@ -203,7 +203,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                                 result = (
                                                     f"Appointment confirmed. Booked for {first_name} {last_name} "
                                                     f"on {real_date} at {time_str} for {reason}. "
-                                                    f"Now say a warm goodbye to the patient."
+                                                    f"Now ask warmly: 'Is there anything else I can help you with today?'"
                                                 )
                                                 log(f"Booking confirmed: {first_name} {last_name} {real_date} {time_str}")
                                             else:
