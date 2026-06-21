@@ -57,6 +57,7 @@ async def voice_chat(websocket: WebSocket):
         "first_name": None, "last_name": None,
         "appointment_date": None, "appointment_time": None,
         "reason": None, "booking_confirmed": False,
+        "session_should_end": False,
         "last_message_is_payload": False,
     }
 
@@ -152,7 +153,8 @@ async def voice_chat(websocket: WebSocket):
                                         content, conversation_state, dg_agent
                                     )
 
-                                is_payload = conversation_state.get("last_message_is_payload", False)
+                                # User speech is never a payload — use stale flag only for assistant.
+                                is_payload = (role == "assistant") and conversation_state.get("last_message_is_payload", False)
                                 is_system = content.strip().startswith("[SYSTEM]")
                                 if not is_payload and not is_system:
                                     try:

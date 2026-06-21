@@ -115,7 +115,10 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                             twilio_msg_count += 1
                             if twilio_msg_count == 1:
                                 log("First audio frame received from Twilio — forwarding to Deepgram")
-                            audio_bytes: bytes = base64.b64decode(data["media"]["payload"])
+                            payload_b64 = data.get("media", {}).get("payload")
+                            if not payload_b64:
+                                continue
+                            audio_bytes: bytes = base64.b64decode(payload_b64)
                             try:
                                 await dg_agent.send(audio_bytes)
                             except (websockets.exceptions.ConnectionClosedOK,
