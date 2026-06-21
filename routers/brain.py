@@ -132,6 +132,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
             # --- RECEIVER: Deepgram → Twilio ---
             async def receive_agent_audio() -> None:
                 nonlocal conversation_state, dg_msg_count
+                farewell_pending: bool = False
                 log("RECEIVER task started (Deepgram → Twilio)")
                 try:
                     while True:
@@ -165,12 +166,10 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     conversation_state = await process_agent_text_response(
                                         content, conversation_state, dg_agent
                                     )
-                                    # Close connection after farewell audio finishes
+                                    # Wait for AgentAudioDone before closing
                                     if conversation_state.get("session_should_end") and role == "assistant":
-                                        log("Farewell detected — closing session.")
-                                        await asyncio.sleep(3)
-                                        await dg_agent.close()
-                                        return
+                                        log("Farewell detected — waiting for AgentAudioDone to close.")
+                                        farewell_pending = True
 
                                 elif msg_type == "FunctionCallRequest":
                                     fn_name  = msg.get("function_name", "")
@@ -224,6 +223,13 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                             "output": result,
                                         }))
                                         log(f"FunctionCallResponse sent: {result}")
+
+                                elif msg_type == "AgentAudioDone":
+                                    if farewell_pending:
+                                        log("AgentAudioDone after farewell — closing session.")
+                                        await asyncio.sleep(0.5)
+                                        await dg_agent.close()
+                                        return
 
                                 elif msg_type == "Error":
                                     log(f"ERROR from Deepgram: {response}")
