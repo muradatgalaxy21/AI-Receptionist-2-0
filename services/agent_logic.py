@@ -13,20 +13,43 @@ from services.tools import check_availability, parse_date, get_available_slots_t
 
 # Keywords indicating user is explicitly asking about available slots/times.
 SLOT_QUERY_KEYWORDS: list = [
-    "which slot", "which time", "what time", "free slot", "available slot",
-    "open slot", "free time", "available time", "any slot", "any time",
+    "which slot", "free slot", "available slot",
+    "open slot", "free time", "available time", "any slot",
     "what slots", "what times", "which times", "slots available", "times available",
-    "slot free", "open time", "is there any slot", "what are the slots",
-    "when can i come", "when can i book", "which hours",
+    "slot free", "is there any slot", "what are the slots",
+    "when can i come", "when can i book",
 ]
 
 # Keywords indicating user is asking about which DATES have availability.
 DATE_AVAILABILITY_KEYWORDS: list = [
-    "which date", "what date", "which day", "what day", "any date", "any day",
-    "which dates", "what dates", "which days", "what days",
+    "which date", "what date", "which dates", "what dates",
     "when are you free", "when is available", "earliest available",
     "soonest available", "next available",
 ]
+
+def _is_hours_question(text_lower: str) -> bool:
+    """
+    Return True when the message is asking about clinic hours/schedule, NOT
+    about booking slots. Used to skip DB-driven slot injection so Sarah can
+    answer from her clinic-knowledge prompt instead.
+
+    Strategy:
+    - Unambiguous hours phrases always match.
+    - "open"/"close" words only count when no slot/booking keyword is also
+      present (e.g. "are you open on Monday?" YES vs "what slots are open?" NO).
+    """
+    UNAMBIGUOUS = ["hours", "opening hours", "closing time", "opening time",
+                   "office hours", "timings", "timing"]
+    if any(kw in text_lower for kw in UNAMBIGUOUS):
+        return True
+
+    HOURS_WORDS = ["open", "close", "closing", "opening"]
+    SLOT_CONTEXT = ["slot", "available", "book", "free", "appointment"]
+    if (any(kw in text_lower for kw in HOURS_WORDS) and
+            not any(kw in text_lower for kw in SLOT_CONTEXT)):
+        return True
+
+    return False
 
 
 def _to_12h(slot: str) -> str:
@@ -152,6 +175,11 @@ async def handle_user_slot_query(
     Returns True if query was handled, False otherwise.
     """
     text_lower: str = user_text.lower()
+
+    # If the patient is asking about clinic hours/schedule (not booking slots),
+    # let Sarah answer from her own prompt knowledge — don't inject DB slot data.
+    if _is_hours_question(text_lower):
+        return False
 
     # Case B: User asking which dates have availability (multi-date scan)
     is_date_query: bool = any(kw in text_lower for kw in DATE_AVAILABILITY_KEYWORDS)

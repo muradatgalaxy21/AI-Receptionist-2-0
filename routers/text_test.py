@@ -96,11 +96,8 @@ async def text_chat(websocket: WebSocket) -> None:
         "appointment_date": None,
         "appointment_time": None,
         "reason": None,
-        # Set to True once an appointment is successfully booked this session.
-        # Prevents the agent from re-triggering a booking after farewell.
         "booking_confirmed": False,
-        # Set to True when the last ConversationText message was a hidden JSON payload.
-        # Used to suppress displaying raw JSON in the chat UI.
+        "session_should_end": False,
         "last_message_is_payload": False,
     }
 
