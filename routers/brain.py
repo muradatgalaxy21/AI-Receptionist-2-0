@@ -360,6 +360,7 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                 if conversation_state.get("first_name") and conversation_state.get("last_name"):
                     patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
                 intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
+                status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Completed"
                 transcript_str = "\n".join(transcript_lines)
                 append_call_log(
                     timestamp=end_time.isoformat(),
