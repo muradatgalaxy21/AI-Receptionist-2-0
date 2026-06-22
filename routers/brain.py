@@ -97,7 +97,7 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
 
             # --- SENDER: Twilio → Deepgram ---
             async def send_mic_audio() -> None:
-                nonlocal stream_sid, twilio_msg_count
+                nonlocal stream_sid, twilio_msg_count, caller_id, to_number
                 log("SENDER task started (Twilio → Deepgram)")
                 try:
                     while True:
@@ -110,8 +110,15 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                         event = data.get("event", "unknown")
 
                         if event == "start":
-                            stream_sid = data.get("start", {}).get("streamSid")
-                            log(f"Twilio stream STARTED. streamSid={stream_sid}")
+                            start_data = data.get("start", {})
+                            stream_sid = start_data.get("streamSid")
+                            # Twilio sends query params as customParameters inside the start event
+                            custom = start_data.get("customParameters", {})
+                            if custom.get("caller_id"):
+                                caller_id = custom["caller_id"]
+                            if custom.get("to_number"):
+                                to_number = custom["to_number"]
+                            log(f"Twilio stream STARTED. streamSid={stream_sid}, caller={caller_id}, to={to_number}")
 
                         elif event == "media":
                             twilio_msg_count += 1
@@ -214,12 +221,24 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                             farewell_pending = True
 
                                 elif msg_type == "FunctionCallRequest":
-                                    fn_name  = msg.get("function_name", "")
-                                    fn_id    = msg.get("function_call_id", "")
-                                    fn_input = msg.get("input") or {}
+                                    # Deepgram sends FunctionCallRequest as a "functions" array.
+                                    # Each element has: id (str), name (str), arguments (JSON string).
+                                    log(f"FunctionCallRequest raw: {response[:400]}")
+                                    functions_list = msg.get("functions", [])
+                                    if not functions_list:
+                                        log("WARNING: FunctionCallRequest has empty functions array — skipping.")
+                                        continue
+                                    fn_obj   = functions_list[0]
+                                    fn_name  = fn_obj.get("name", "")
+                                    fn_id    = fn_obj.get("id", "")
+                                    fn_args_raw = fn_obj.get("arguments", "{}")
+                                    try:
+                                        fn_input = json.loads(fn_args_raw) if fn_args_raw else {}
+                                    except (json.JSONDecodeError, ValueError):
+                                        fn_input = {}
                                     if not isinstance(fn_input, dict):
                                         fn_input = {}
-                                    log(f"FUNCTION CALL: {fn_name} | args={fn_input}")
+                                    log(f"FUNCTION CALL: {fn_name} | id={fn_id} | args={fn_input}")
 
                                     # Default result — handles any unexpected function name
                                     # so Deepgram never hangs waiting for a response.
@@ -286,7 +305,7 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
 
                                     await dg_agent.send(json.dumps({
                                         "type": "FunctionCallResponse",
-                                        "function_call_id": fn_id,
+                                        "id": fn_id,
                                         "output": result,
                                     }))
                                     log(f"FunctionCallResponse sent: {result[:100]}")
