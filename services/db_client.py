@@ -13,8 +13,20 @@ class DatabaseClient:
     def __init__(self) -> None:
         self.db_url = os.getenv("TURSO_DATABASE_URL")
         self.auth_token = os.getenv("TURSO_AUTH_TOKEN")
-        self.use_turso = bool(self.db_url and self.auth_token)
         self.client = None
+
+        # Clean whitespaces and strip quotes if any
+        if self.db_url:
+            self.db_url = self.db_url.strip().strip('"').strip("'")
+            # Convert libsql:// to https:// to use HTTPS instead of WebSockets
+            # (avoids WebSocket 400 handshake errors in restricted cloud containers)
+            if self.db_url.startswith("libsql://"):
+                self.db_url = "https://" + self.db_url[9:]
+                
+        if self.auth_token:
+            self.auth_token = self.auth_token.strip().strip('"').strip("'")
+
+        self.use_turso = bool(self.db_url and self.auth_token)
 
         if self.use_turso:
             try:
@@ -23,7 +35,7 @@ class DatabaseClient:
                     url=self.db_url,
                     auth_token=self.auth_token
                 )
-                print("[DB] Connected to Turso cloud database.")
+                print(f"[DB] Connected to Turso cloud database using URL: {self.db_url}")
             except ImportError:
                 print("[DB] WARNING: TURSO_DATABASE_URL is set but 'libsql-client' is not installed. Falling back to local SQLite.")
                 self.use_turso = False
