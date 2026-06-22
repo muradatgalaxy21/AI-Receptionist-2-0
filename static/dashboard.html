@@ -168,9 +168,21 @@
         </header>
 
         <!-- Container -->
-        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
             
-            <!-- KPI Cards Row -->
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-darkBorder/60">
+                <button id="tabAnalytics" class="px-6 py-3.5 text-sm font-bold border-b-2 border-brand-500 text-white transition-all focus:outline-none flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-brand-400"></i> Analytics Dashboard
+                </button>
+                <button id="tabLogs" class="px-6 py-3.5 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white transition-all focus:outline-none flex items-center gap-2">
+                    <i class="fa-solid fa-terminal text-gray-500"></i> Live System Logs
+                </button>
+            </div>
+
+            <!-- View 1: Analytics -->
+            <div id="viewAnalytics" class="space-y-8">
+                <!-- KPI Cards Row -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <!-- Total Calls Card -->
                 <div class="glass-panel rounded-2xl p-6 glow-hover transition-all duration-300 relative overflow-hidden group">
@@ -288,6 +300,28 @@
                 <div id="tableEmptyState" class="hidden text-center py-12 text-gray-500">
                     <i class="fa-regular fa-folder-open text-4xl mb-3 block text-gray-600"></i>
                     <p class="text-sm">No call records found matching search filters.</p>
+                </div>
+            </div>
+            
+            </div> <!-- End of viewAnalytics -->
+
+            <!-- View 2: Live Logs -->
+            <div id="viewLogs" class="hidden space-y-6">
+                <div class="glass-panel rounded-2xl border border-darkBorder overflow-hidden">
+                    <div class="p-6 border-b border-darkBorder flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-400"></i> Live Console Output
+                            </h2>
+                            <p class="text-xs text-gray-400">Real-time uvicorn and receptionist logs capturing system actions</p>
+                        </div>
+                        <button id="clearLogsBtn" class="px-3 py-1.5 bg-darkBg hover:bg-darkBg/60 border border-darkBorder hover:border-red-500/30 text-xs text-gray-400 hover:text-red-400 rounded-xl transition-all">
+                            <i class="fa-solid fa-trash mr-1.5"></i> Clear View
+                        </button>
+                    </div>
+                    <div class="p-5 bg-black/90 font-mono text-xs text-emerald-400 leading-relaxed overflow-y-auto h-[600px] border-t border-darkBorder/40 rounded-b-2xl whitespace-pre-wrap select-text" id="logsTerminal">
+                        Initializing connection to system stream...
+                    </div>
                 </div>
             </div>
 
@@ -707,6 +741,71 @@
                     cutout: '60%'
                 }
             });
+        }
+
+        // Tab switching and Live Logs logic
+        const tabAnalytics = document.getElementById('tabAnalytics');
+        const tabLogs = document.getElementById('tabLogs');
+        const viewAnalytics = document.getElementById('viewAnalytics');
+        const viewLogs = document.getElementById('viewLogs');
+        const logsTerminal = document.getElementById('logsTerminal');
+        const clearLogsBtn = document.getElementById('clearLogsBtn');
+
+        let logsInterval = null;
+        let isLogsViewActive = false;
+
+        tabAnalytics.addEventListener('click', () => {
+            isLogsViewActive = false;
+            clearInterval(logsInterval);
+            
+            // Toggle view visibility
+            viewAnalytics.classList.remove('hidden');
+            viewLogs.classList.add('hidden');
+            
+            // Toggle tab active classes
+            tabAnalytics.className = "px-6 py-3.5 text-sm font-bold border-b-2 border-brand-500 text-white transition-all focus:outline-none flex items-center gap-2";
+            tabLogs.className = "px-6 py-3.5 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white transition-all focus:outline-none flex items-center gap-2";
+        });
+
+        tabLogs.addEventListener('click', () => {
+            isLogsViewActive = true;
+            
+            // Toggle view visibility
+            viewAnalytics.classList.add('hidden');
+            viewLogs.classList.remove('hidden');
+            
+            // Toggle tab active classes
+            tabAnalytics.className = "px-6 py-3.5 text-sm font-bold border-b-2 border-transparent text-gray-400 hover:text-white transition-all focus:outline-none flex items-center gap-2";
+            tabLogs.className = "px-6 py-3.5 text-sm font-bold border-b-2 border-brand-500 text-white transition-all focus:outline-none flex items-center gap-2";
+            
+            // Start fetching live logs
+            fetchLogs();
+            clearInterval(logsInterval);
+            logsInterval = setInterval(fetchLogs, 2000);
+        });
+
+        clearLogsBtn.addEventListener('click', () => {
+            logsTerminal.innerText = 'Log view cleared. Waiting for new logs...';
+        });
+
+        async function fetchLogs() {
+            if (!isLogsViewActive) return;
+            try {
+                const response = await fetch('/api/live-logs');
+                if (!response.ok) throw new Error('Failed to fetch system logs');
+                const data = await response.json();
+                
+                if (data.logs && data.logs.length > 0) {
+                    logsTerminal.innerText = data.logs.join('\n');
+                    // Auto-scroll to bottom of terminal
+                    logsTerminal.scrollTop = logsTerminal.scrollHeight;
+                } else {
+                    logsTerminal.innerText = 'No system logs recorded yet.';
+                }
+            } catch (err) {
+                console.error('Error fetching live logs:', err);
+                logsTerminal.innerText = 'Error connecting to system log stream...';
+            }
         }
     </script>
 </body>

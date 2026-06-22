@@ -29,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
+# Initialize live system log capture immediately
+from services.log_capture import log_capturer
+
 # Import your modules
 from routers import twilio
 from routers import text_test
@@ -74,6 +77,11 @@ async def dashboard_stats():
     """Returns analytics data and metrics for the dashboard."""
     from services.db_client import db
     return db.get_dashboard_stats()
+
+@app.get("/api/live-logs")
+async def live_logs():
+    """Returns real-time console/system logs."""
+    return {"logs": log_capturer.get_logs()}
 
 # 3. THE MISSING LINK: The WebSocket Route (The "Conversation")
 # When Twilio connects the audio, it looks for "/media-stream".

@@ -18,6 +18,21 @@ class DatabaseClient:
         # Clean whitespaces and strip quotes if any
         if self.db_url:
             self.db_url = self.db_url.strip().strip('"').strip("'")
+            
+            # Auto-convert regional Turso URLs to global URLs to bypass the WSServerHandshakeError / 400
+            # handshake bug in the libsql-client Python library.
+            if "turso.io" in self.db_url:
+                proto = ""
+                host = self.db_url
+                if "://" in self.db_url:
+                    proto, host = self.db_url.split("://", 1)
+                    proto = proto + "://"
+                
+                if ".turso.io" in host:
+                    parts = host.split(".")
+                    if len(parts) > 2:
+                        global_host = parts[0] + ".turso.io"
+                        self.db_url = proto + global_host
                 
         if self.auth_token:
             self.auth_token = self.auth_token.strip().strip('"').strip("'")
