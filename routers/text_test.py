@@ -231,6 +231,81 @@ async def text_chat(websocket: WebSocket) -> None:
                                 session_active = False
                                 return
 
+                        elif msg_type == "FunctionCallRequest":
+                            functions_list = msg.get("functions", [])
+                            if not functions_list:
+                                print("[TEXT-TEST] FunctionCallRequest has empty functions array — skipping.")
+                                continue
+                            fn_obj      = functions_list[0]
+                            fn_name     = fn_obj.get("name", "")
+                            fn_id       = fn_obj.get("id", "")
+                            fn_args_raw = fn_obj.get("arguments", "{}")
+                            try:
+                                fn_input = json.loads(fn_args_raw) if fn_args_raw else {}
+                            except (json.JSONDecodeError, ValueError):
+                                fn_input = {}
+                            if not isinstance(fn_input, dict):
+                                fn_input = {}
+                            print(f"[TEXT-TEST] FUNCTION CALL: {fn_name} | id={fn_id} | args={fn_input}")
+
+                            result = f"Function '{fn_name}' is not available."
+
+                            if fn_name == "book_appointment":
+                                from services.database import book_appointment as db_book_appt
+                                from services.tools import parse_date, check_availability, get_available_slots_tool
+
+                                first_name = fn_input.get("first_name", "").strip()
+                                last_name  = fn_input.get("last_name", "").strip()
+                                date_str   = fn_input.get("date", "").strip()
+                                time_str   = fn_input.get("time", "").strip()
+                                reason     = fn_input.get("reason", "").strip()
+
+                                missing = [f for f, v in {
+                                    "first_name": first_name, "last_name": last_name,
+                                    "date": date_str, "time": time_str, "reason": reason,
+                                }.items() if not v]
+                                if missing:
+                                    result = f"Missing fields: {', '.join(missing)}. Please ask the patient to provide them."
+                                else:
+                                    real_date = parse_date(date_str)
+                                    if not real_date:
+                                        result = "Could not understand the date. Please ask the patient to repeat it clearly."
+                                    elif check_availability(real_date, time_str):
+                                        success = db_book_appt(first_name, last_name, real_date, time_str, reason)
+                                        if success:
+                                            conversation_state.update({
+                                                "first_name": first_name, "last_name": last_name,
+                                                "appointment_date": real_date, "appointment_time": time_str,
+                                                "reason": reason, "booking_confirmed": True,
+                                                "_booking_just_confirmed": True,
+                                            })
+                                            result = (
+                                                f"Appointment confirmed. Booked for {first_name} {last_name} "
+                                                f"on {real_date} at {time_str} for {reason}. "
+                                                f"Warmly tell the patient their appointment is booked, then ask: "
+                                                f"'Is there anything else I can help you with today?' "
+                                                f"Do NOT say goodbye or end the call — wait for the patient's response."
+                                            )
+                                        else:
+                                            result = "Booking failed due to a system error. Please let the patient know and apologise."
+                                    else:
+                                        free_slots = get_available_slots_tool(real_date)
+                                        slots_str = ", ".join(free_slots) if free_slots else "no available slots"
+                                        result = (
+                                            f"That slot is unavailable. Available times on {real_date}: {slots_str}. "
+                                            f"Ask the patient to choose another time."
+                                        )
+
+                            try:
+                                await dg_agent.send(json.dumps({
+                                    "type": "FunctionCallResponse",
+                                    "id": fn_id,
+                                    "output": result,
+                                }))
+                                print(f"[TEXT-TEST] FunctionCallResponse sent: {result[:100]}")
+                            except Exception as e:
+                                print(f"[TEXT-TEST] FunctionCallResponse send error: {e}")
+
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
