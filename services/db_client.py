@@ -18,10 +18,6 @@ class DatabaseClient:
         # Clean whitespaces and strip quotes if any
         if self.db_url:
             self.db_url = self.db_url.strip().strip('"').strip("'")
-            # Convert libsql:// to https:// to use HTTPS instead of WebSockets
-            # (avoids WebSocket 400 handshake errors in restricted cloud containers)
-            if self.db_url.startswith("libsql://"):
-                self.db_url = "https://" + self.db_url[9:]
                 
         if self.auth_token:
             self.auth_token = self.auth_token.strip().strip('"').strip("'")
