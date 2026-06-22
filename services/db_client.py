@@ -18,21 +18,24 @@ class DatabaseClient:
         # Clean whitespaces and strip quotes if any
         if self.db_url:
             self.db_url = self.db_url.strip().strip('"').strip("'")
-            
-            # Auto-convert regional Turso URLs to global URLs to bypass the WSServerHandshakeError / 400
-            # handshake bug in the libsql-client Python library.
-            if "turso.io" in self.db_url:
-                proto = ""
-                host = self.db_url
-                if "://" in self.db_url:
-                    proto, host = self.db_url.split("://", 1)
-                    proto = proto + "://"
-                
-                if ".turso.io" in host:
-                    parts = host.split(".")
-                    if len(parts) > 2:
-                        global_host = parts[0] + ".turso.io"
-                        self.db_url = proto + global_host
+
+            # Normalize protocol to https — wss:// and libsql:// both fail with HTTP 400
+            # on Render because the Python libsql-client WebSocket handshake is rejected.
+            # https:// uses plain HTTP/2 which works reliably in all cloud environments.
+            if self.db_url.startswith("wss://"):
+                self.db_url = "https://" + self.db_url[6:]
+            elif self.db_url.startswith("ws://"):
+                self.db_url = "http://" + self.db_url[5:]
+            elif self.db_url.startswith("libsql://"):
+                self.db_url = "https://" + self.db_url[9:]
+
+            # Strip regional suffix (e.g. .fra-3.turso.io → .turso.io) so the
+            # libsql client uses the global primary endpoint.
+            if "turso.io" in self.db_url and "://" in self.db_url:
+                proto, host = self.db_url.split("://", 1)
+                parts = host.split(".")
+                if len(parts) > 3:
+                    self.db_url = proto + "://" + parts[0] + ".turso.io"
                 
         if self.auth_token:
             self.auth_token = self.auth_token.strip().strip('"').strip("'")
