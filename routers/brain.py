@@ -261,6 +261,7 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                                         "appointment_time": time_str,
                                                         "reason": reason,
                                                         "booking_confirmed": True,
+                                                        "_booking_just_confirmed": True,
                                                     })
                                                     result = (
                                                         f"Appointment confirmed. Booked for {first_name} {last_name} "

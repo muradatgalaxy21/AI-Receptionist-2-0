@@ -614,6 +614,15 @@ async def process_agent_text_response(
 
     print(f"Sarah: {content}")
 
+    # After a booking is confirmed, suppress farewell detection for Sarah's immediate
+    # confirmation message. Sarah may say "have a great day" as part of the confirmation,
+    # but the call is not over — the patient still needs to respond to "Is there anything
+    # else I can help you with today?" Only re-enable farewell detection on the next turn.
+    if conversation_state.get("_booking_just_confirmed"):
+        conversation_state["_booking_just_confirmed"] = False
+        conversation_state = extract_recap_fields(content, conversation_state)
+        return conversation_state
+
     # Step 2: Detect farewell -- mark session for clean shutdown
     if is_farewell(content):
         print("---> FAREWELL DETECTED. Marking session for closure.")
