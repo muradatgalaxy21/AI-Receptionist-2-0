@@ -265,7 +265,10 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                                     result = (
                                                         f"Appointment confirmed. Booked for {first_name} {last_name} "
                                                         f"on {real_date} at {time_str} for {reason}. "
-                                                        f"Now ask warmly: 'Is there anything else I can help you with today?'"
+                                                        f"Warmly tell the patient their appointment is booked, then ask: "
+                                                        f"'Is there anything else I can help you with today?' "
+                                                        f"Do NOT say goodbye, 'have a great day', or end the call — "
+                                                        f"the call is still open. Wait for the patient's response."
                                                     )
                                                     log(f"Booking confirmed: {first_name} {last_name} {real_date} {time_str}")
                                                 else:
