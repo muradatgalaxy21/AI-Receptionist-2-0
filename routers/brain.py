@@ -39,7 +39,7 @@ def load_agent_config() -> dict:
     return agent_config
 
 
-async def process_audio_stream(websocket: WebSocket) -> None:
+async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown", to_number: str = "unknown") -> None:
     log("=" * 60)
     log("NEW CALL SESSION STARTED")
     log(f"websockets version: {websockets.__version__}")
@@ -50,6 +50,7 @@ async def process_audio_stream(websocket: WebSocket) -> None:
     log(f"DEEPGRAM_API_KEY loaded. Length={len(DEEPGRAM_API_KEY)}, Starts with: {DEEPGRAM_API_KEY[:8]}...")
 
     start_time: datetime = datetime.utcnow()
+    transcript_lines: list = []
     conversation_state: dict = {
         "first_name": None,
         "last_name": None,
@@ -183,6 +184,10 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                                     content: str = msg.get("content", "")
                                     role: str = msg.get("role", "unknown")
                                     log(f"  [{role}]: {content[:120]}")
+                                    
+                                    # Save to dynamic conversation transcript
+                                    speaker = "Patient" if role == "user" else "Sarah"
+                                    transcript_lines.append(f"{speaker}: {content}")
 
                                     if role == "user":
                                         # Deepgram echoes every InjectUserMessage back as a role="user"
@@ -355,19 +360,21 @@ async def process_audio_stream(websocket: WebSocket) -> None:
                 if conversation_state.get("first_name") and conversation_state.get("last_name"):
                     patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
                 intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
-                status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Follow-up Needed"
+                transcript_str = "\n".join(transcript_lines)
                 append_call_log(
                     timestamp=end_time.isoformat(),
-                    caller_id="unknown",
+                    caller_id=caller_id,
+                    to_number=to_number,
                     patient_name=patient_name,
                     call_duration=call_duration,
                     intent=intent,
                     summary=conversation_state.get("last_summary", ""),
+                    transcript=transcript_str,
                     status=status,
                     estimated_value=100.0 if conversation_state.get("booking_confirmed") else 0.0,
                     recording_url="",
                 )
-                log(f"Call logged. Duration={call_duration:.1f}s, Patient={patient_name or 'unknown'}")
+                log(f"Call logged. Caller={caller_id}, Dialed={to_number}, Duration={call_duration:.1f}s, Patient={patient_name or 'unknown'}")
             except Exception as e:
                 log(f"ERROR logging call: {e}")
                 log(traceback.format_exc())

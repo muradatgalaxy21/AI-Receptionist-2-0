@@ -63,6 +63,18 @@ async def chat_page():
     """Serves the text-based chat interface."""
     return FileResponse("static/test_chat.html")
 
+# 2c. Serve the Dashboard Page and API stats endpoint
+@app.get("/dashboard")
+async def dashboard_page():
+    """Serves the premium analytics dashboard."""
+    return FileResponse("static/dashboard.html")
+
+@app.get("/api/dashboard-stats")
+async def dashboard_stats():
+    """Returns analytics data and metrics for the dashboard."""
+    from services.db_client import db
+    return db.get_dashboard_stats()
+
 # 3. THE MISSING LINK: The WebSocket Route (The "Conversation")
 # When Twilio connects the audio, it looks for "/media-stream".
 @app.websocket("/media-stream")
@@ -70,9 +82,13 @@ async def media_stream(websocket: WebSocket):
     # Accept the connection
     await websocket.accept()
     
+    # Extract query parameters (passed from twilio voice webhook)
+    caller_id = websocket.query_params.get("caller_id", "unknown")
+    to_number = websocket.query_params.get("to_number", "unknown")
+    
     # Hand over control to your "Brain"
     # This will automatically load your config.json and data.json
-    await process_audio_stream(websocket)
+    await process_audio_stream(websocket, caller_id=caller_id, to_number=to_number)
 
 if __name__ == "__main__":
     # This allows you to run "python main.py" to start the server

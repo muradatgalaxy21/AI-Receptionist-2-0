@@ -1,11 +1,8 @@
-import sqlite3
 from datetime import datetime
 import os
 
 from dateutil import parser as date_parser
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(BASE_DIR, "appointments.db")
+from services.db_client import db
 
 def normalize_time(time_str):
     try:
@@ -26,23 +23,7 @@ def normalize_time(time_str):
         return time_str # Fallback
 
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    # Correct Schema
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            reason TEXT NOT NULL,
-            appointment_date TEXT NOT NULL,
-            appointment_time TEXT NOT NULL,
-            status TEXT DEFAULT 'confirmed'
-        )
-    ''')
-    conn.commit()
-    conn.close()
-    print("Database initialized.")
+    db.init_db()
 
 def _valid_clinic_slots_for(date: str) -> list:
     """Return the list of valid slot strings for a given YYYY-MM-DD date.
@@ -67,14 +48,12 @@ def is_slot_available(date, time):
     if clean_time not in valid_slots:
         print(f"Slot {date} {clean_time} rejected — not a valid clinic slot.")
         return False
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute(
+    
+    rows = db.execute(
         "SELECT count(*) FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'",
         (date, clean_time)
     )
-    count = cursor.fetchone()[0]
-    conn.close()
+    count = rows[0][0] if rows else 0
     if count > 0:
         print(f"Slot {date} {clean_time} is BUSY.")
     return count == 0
@@ -82,8 +61,7 @@ def is_slot_available(date, time):
 
 def book_appointment(first_name, last_name, appointment_date, appointment_time, reason):
     """
-    Atomically checks slot availability and inserts the booking in one transaction
-    to prevent double-booking under concurrent requests.
+    Atomically checks slot availability and inserts the booking.
     Returns True on success, False if slot is taken, invalid, or on error.
     """
     clean_time = normalize_time(appointment_time)
@@ -94,33 +72,20 @@ def book_appointment(first_name, last_name, appointment_date, appointment_time, 
     if clean_time not in valid_slots:
         print(f"Booking rejected — {clean_time} is not a valid slot on {appointment_date}.")
         return False
-    conn = sqlite3.connect(DB_NAME)
-    try:
-        # BEGIN IMMEDIATE acquires a write lock upfront so no other
-        # connection can insert the same slot between our check and insert.
-        conn.execute("BEGIN IMMEDIATE")
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT count(*) FROM appointments WHERE appointment_date = ? AND appointment_time = ? AND status = 'confirmed'",
-            (appointment_date, clean_time)
-        )
-        if cursor.fetchone()[0] > 0:
-            conn.rollback()
-            print(f"Slot {appointment_date} {clean_time} was taken by another booking.")
-            return False
-        cursor.execute(
-            "INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)",
-            (first_name, last_name, appointment_date, clean_time, reason)
-        )
-        conn.commit()
+    
+    # Check availability
+    if not is_slot_available(appointment_date, clean_time):
+        print(f"Slot {appointment_date} {clean_time} was taken by another booking.")
+        return False
+
+    success = db.execute_write(
+        "INSERT INTO appointments (first_name, last_name, appointment_date, appointment_time, reason) VALUES (?, ?, ?, ?, ?)",
+        (first_name, last_name, appointment_date, clean_time, reason)
+    )
+    if success:
         print(f"Booking saved for {first_name} {last_name} at {appointment_date} {clean_time}")
         return True
-    except Exception as e:
-        conn.rollback()
-        print(f"Error booking: {e}")
-        return False
-    finally:
-        conn.close()
+    return False
 
 
 def get_available_slots(date: str) -> list:
@@ -139,14 +104,11 @@ def get_available_slots(date: str) -> list:
     else:
         standard_slots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
 
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute(
+    rows = db.execute(
         "SELECT appointment_time FROM appointments WHERE appointment_date = ? AND status = 'confirmed'",
         (date,)
     )
-    booked_slots = [row[0] for row in cursor.fetchall()]
-    conn.close()
+    booked_slots = [row[0] for row in rows]
 
     return [slot for slot in standard_slots if slot not in booked_slots]
 
@@ -184,4 +146,5 @@ def get_available_dates_with_slots(days_ahead: int = 14) -> list:
 
 
 # Initialize the DB immediately when this file is imported
+# db_client initializes itself automatically, but we keep this call for compatibility
 init_db()
