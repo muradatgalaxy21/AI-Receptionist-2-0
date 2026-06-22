@@ -18,11 +18,14 @@ async def incoming_call(request: Request):
     print(f"Telling Twilio to connect to: {ws_url}")
     print(f"--------------------------------------------\n")
 
+    # Twilio XML parser requires ampersands in URLs to be escaped as &amp;
+    ws_url_escaped = ws_url.replace("&", "&amp;")
+
     # No <Pause> after <Connect> — when our WebSocket closes, Twilio hangs up immediately.
     response_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
-        <Stream url="{ws_url}" />
+        <Stream url="{ws_url_escaped}" />
     </Connect>
 </Response>"""
     return HTMLResponse(content=response_xml, media_type="application/xml")
