@@ -121,9 +121,7 @@ async def handle_date_selection_in_booking(
     This prevents Sarah from offering appointment slots when the user mentions
     any date in passing (e.g. "I had a filling last Monday").
     """
-    # Only inject slot data if we're in an active booking flow (have name, not yet confirmed)
-    if not conversation_state.get("first_name"):
-        return False
+    # Don't inject slot data if booking is already done this session
     if conversation_state.get("booking_confirmed"):
         return False
 

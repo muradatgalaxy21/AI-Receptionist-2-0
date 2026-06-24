@@ -17,3 +17,4 @@ tests/conversation_logs/
 .claude/
 .gitignore
 scratch*.py
+branch_structure.json
