@@ -183,7 +183,8 @@ async def voice_chat(websocket: WebSocket):
                                     await dg_agent.send(json.dumps({
                                         "type": "FunctionCallResponse",
                                         "id": fn_id,
-                                        "output": result,
+                                        "name": fn_name,
+                                        "content": result,
                                     }))
                                 except Exception as e:
                                     print(f"[VOICE] FunctionCallResponse send error: {e}")

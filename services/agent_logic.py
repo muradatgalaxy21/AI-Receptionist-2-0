@@ -36,11 +36,14 @@ async def handle_date_selection_in_booking(user_text: str, conversation_state: D
 # ---------------------------------------------------------------------------
 # Farewell detection
 # ---------------------------------------------------------------------------
+# Note: "thank you for calling" is deliberately NOT here — the Grand Horizon
+# greeting opens with "Thank you for calling the Grand Horizon Hotel...", so it
+# would end every session on the first agent turn. The hotel farewell always
+# carries "have a great day" / "goodbye" (see config.json ENDING THE CALL rule).
 FAREWELL_PHRASES: list = [
     "goodbye",
     "good bye",
     "have a great day",
-    "thank you for calling",
     "thank you, goodbye",
     "thank you. goodbye",
 ]

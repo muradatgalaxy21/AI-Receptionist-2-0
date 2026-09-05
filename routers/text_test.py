@@ -112,7 +112,7 @@ async def text_chat(websocket: WebSocket) -> None:
     try:
         async with websockets.connect(
             AGENT_URL,
-            additional_headers=headers,
+            extra_headers=headers,
             # Enable built-in WebSocket ping/pong frames to detect dead connections
             ping_interval=20,
             ping_timeout=10,
@@ -264,11 +264,19 @@ async def text_chat(websocket: WebSocket) -> None:
                                 await dg_agent.send(json.dumps({
                                     "type": "FunctionCallResponse",
                                     "id": fn_id,
-                                    "output": result,
+                                    "name": fn_name,
+                                    "content": result,
                                 }))
                                 print(f"[TEXT-TEST] FunctionCallResponse sent: {result[:100]}")
                             except Exception as e:
                                 print(f"[TEXT-TEST] FunctionCallResponse send error: {e}")
+
+                        elif msg_type == "Error":
+                            print(f"[TEXT-TEST] ERROR from Deepgram: {response[:400]}")
+                        elif msg_type == "Warning":
+                            print(f"[TEXT-TEST] WARNING from Deepgram: {response[:400]}")
+                        else:
+                            print(f"[TEXT-TEST] Unhandled message type '{msg_type}': {response[:200]}")
 
                 except asyncio.CancelledError:
                     pass

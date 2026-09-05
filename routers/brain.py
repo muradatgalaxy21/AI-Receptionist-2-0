@@ -242,7 +242,8 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                     await dg_agent.send(json.dumps({
                                         "type": "FunctionCallResponse",
                                         "id": fn_id,
-                                        "output": result,
+                                        "name": fn_name,
+                                        "content": result,
                                     }))
                                     log(f"FunctionCallResponse sent: {result[:100]}")
 
