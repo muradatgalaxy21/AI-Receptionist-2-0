@@ -28,7 +28,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [x] [DONE] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py` — `dispatch_booking_created()` / `dispatch_call_completed()` schedule a background `httpx` POST (10s timeout) and return immediately; all errors logged + swallowed. Builds the `{event, timestamp, call_sid, data}` envelope from `docs/webhook_payload_contracts.md`. When `MAKE_WEBHOOK_URL` is unset/placeholder it logs the payload and no-ops (Engineer B hasn't delivered the URL yet). `python services/webhook_dispatcher.py` self-check covers envelope + no-URL path.
 - [x] [DONE] Hook `booking.created` and `call.completed` into `routers/brain.py` and `routers/text_test.py` — both routers now dispatch the `book_room` function call to `handle_booking_function_call` (which fires `booking.created` from inside `finalize_booking`), init the hotel `conversation_state`, and fire `call.completed` on session end (brain.py also captures Twilio `callSid` and logs `total_cost` as the call's estimated value). Dental slot-injection wiring removed. `routers/voice_browser.py` got the same treatment (not in the checklist, but it imports the same shared logic and would otherwise still book dental appointments / crash the app import). Prompt context label `CLINIC DATA:` -> `HOTEL DATA:` in all three. `python -c "import main"` loads the full app clean.
 - [x] [DONE] Update web chat testing interface in `static/test_chat.html` — retitled/rethemed for the Grand Horizon Hotel (Sarah "AI Concierge", gold + navy palette swapped in for the blue/purple), added a row of quick-action chips (Book a room, Room rates, Check-in times, Pet policy, Airport shuttle) that prefill and send a test prompt; chips enable/disable with the connection. WebSocket logic untouched. (Pre-existing glow-shadow styling left as-is — cosmetic, outside Track A scope.)
-- [ ] [TODO] Google Calendar API synchronization bridge in `services/calender.py`
+- [x] [DONE] Google Calendar API synchronization bridge in `services/calender.py` — `add_reservation_to_calendar(booking)` mirrors a confirmed reservation onto a calendar as an all-day check-in→check-out event. Self-disabling: with no `google-api-python-client` / `credentials.json` / `GOOGLE_CALENDAR_ID` it logs a `(mock)` line and returns ok, so a booking is never blocked by calendar issues. Called from `finalize_booking` right after the webhook dispatch (wrapped in try/except). Google libs deliberately NOT added to `requirements.txt` (optional per the plan); enable steps are in the module docstring. `python -m services.calender` self-check covers mock mode.
 
 ## Track B: Cloud Automations, GHL & Presentation (Engineer B)
 - [ ] [TODO] Build Make.com scenario routing (`booking.created` and `call.completed`)
@@ -46,10 +46,11 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ## Session Log
 
-### Session 2 — 2026-09-05 (Engineer A) — IN PROGRESS
+### Session 2 — 2026-09-05 (Engineer A) — CLOSED
 
-Phase 1 / Track A implementation. Hotel = **Grand Horizon Hotel**, receptionist
-persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
+Phase 1 / Track A implementation — **all 9 items done**. Hotel = **Grand
+Horizon Hotel**, receptionist persona stays **Sarah**. One commit + push to
+`engineer-a` per feature.
 
 **Done:**
 - `data/data.json` rewritten from dental clinic to Grand Horizon Hotel: room
@@ -71,8 +72,28 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
   `conversation_state`, `call.completed` on session end, `HOTEL DATA:`
   label. brain.py captures Twilio `callSid`.
 - `static/test_chat.html` — hotel retheme + quick-action chips.
+- `services/calender.py` — optional, self-disabling Google Calendar mirror
+  called from `finalize_booking`.
 - Built the leaf modules ahead of the state machine (the plan's listed order)
   because `agent_logic.py` depends on all three.
+
+**Verified this session:**
+- `python -m services.<mod>` self-checks pass for `booking_id`, `tools`,
+  `webhook_dispatcher`, `agent_logic`, `calender`.
+- `python -c "import main"` loads the full FastAPI app clean; every tracked
+  `.py` compiles.
+- NOT run: a live end-to-end call/chat against Deepgram (needs the running
+  server + a real conversation), and the real Make.com / Google Calendar
+  round-trips — those depend on Engineer B's `MAKE_WEBHOOK_URL` and optional
+  Google creds, both still placeholders, so the dispatcher logs the payload
+  instead of POSTing.
+
+**Left for next session:**
+- Track A code is complete. Next is Track C joint verification once
+  `MAKE_WEBHOOK_URL` is live: run the server, do a web-chat reservation,
+  confirm the `booking.created` payload reaches Make.com.
+- `tests/` still holds the old dental CLI helpers (`test_agent_text.py`,
+  `test_suppression.py`). A small hotel booking test module is worth adding.
 
 ### Session 1 — 2026-09-05 (Engineer A) — CLOSED
 

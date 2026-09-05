@@ -162,6 +162,13 @@ def finalize_booking(conversation_state: Dict[str, Any], call_sid: Optional[str]
 
     dispatch_booking_created(data, call_sid)
 
+    # Optional Google Calendar mirror (self-disabling; never blocks the booking).
+    try:
+        from services.calender import add_reservation_to_calendar
+        add_reservation_to_calendar(data)
+    except Exception as e:
+        print(f"[CALENDAR] sync skipped: {e}")
+
     conversation_state.update({
         "booking_confirmed": True,
         "booking_id": booking_id,
