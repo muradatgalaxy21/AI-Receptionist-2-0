@@ -22,7 +22,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 ## Phase 1 / Track A: Python Codebase & AI Core (Engineer A)
 - [x] [DONE] Define hotel metadata, room tiers, rates, and policies in `data/data.json` — Grand Horizon Hotel, San Diego. 4 room types (Standard Queen $149, Deluxe King $199, Executive Suite $329, Penthouse $599) with rates/occupancy/descriptions, plus amenities, policies (check-in/out, cancellation, pets, smoking, parking, resort fee, extra guests), and FAQs.
 - [x] [DONE] Rewrite system prompt for Hotel Sarah in `data/config.json` — Sarah is now the Grand Horizon Hotel front desk. Prompt collects the 8 reservation fields one by one, confirms, then calls the new `book_room` function (replaces `book_appointment`). Greeting + FAQ handling reworked for hotel domain; voice/silence rules kept.
-- [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
+- [x] [DONE] Implement hotel booking state machine in `services/agent_logic.py` — rewritten for hotel fields (`first_name`, `last_name`, `phone_number`, `room_type`, `check_in_date`, `check_out_date`, `number_of_guests`, `special_requests`). `finalize_booking()` validates required fields, prices the stay, enforces room max-occupancy, mints a Booking ID, fires `booking.created`, and is idempotent. Two entry points converge on it: `handle_booking_function_call()` (the `book_room` function call) and `try_book_from_json_payload()` (legacy `ready_to_book` fallback). Dental slot-injection / early-availability code removed; `handle_user_slot_query` / `handle_date_selection_in_booking` kept as no-ops for callers still importing them. `python -m services.agent_logic` self-check covers the happy path, idempotency, missing fields, and over-occupancy.
 - [x] [DONE] Implement unique booking ID generator in `services/booking_id.py` — `generate_booking_id()` returns `HTL-####X` (4 digits + capital letter). In-process dedupe set; `python services/booking_id.py` self-check asserts format + uniqueness over 5000 draws.
 - [x] [DONE] Implement stay duration and pricing calculation helper in `services/tools.py` — `calculate_nights()`, `match_room_type()`, `get_nightly_rate()`, `price_reservation()` (reads rates from `data/data.json`; `total_cost = nights * nightly_rate` per the webhook contract). Also fixed a latent `parse_date()` bug: `dayfirst=True` mis-read `YYYY-MM-DD` strings (`2026-09-10` -> Oct 9), which `book_room`'s ISO dates would hit every time. `python services/tools.py` self-check covers both.
 - [x] [DONE] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py` — `dispatch_booking_created()` / `dispatch_call_completed()` schedule a background `httpx` POST (10s timeout) and return immediately; all errors logged + swallowed. Builds the `{event, timestamp, call_sid, data}` envelope from `docs/webhook_payload_contracts.md`. When `MAKE_WEBHOOK_URL` is unset/placeholder it logs the payload and no-ops (Engineer B hasn't delivered the URL yet). `python services/webhook_dispatcher.py` self-check covers envelope + no-URL path.
@@ -63,6 +63,9 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
   `parse_date()` ISO-date (`dayfirst`) bug.
 - `services/webhook_dispatcher.py` — non-blocking `httpx` POST to
   `MAKE_WEBHOOK_URL`; no-ops with a logged payload until the URL is set.
+- `services/agent_logic.py` — rewritten hotel booking state machine
+  (`finalize_booking` + `book_room` / `ready_to_book` entry points);
+  dental slot code dropped.
 - Built the leaf modules ahead of the state machine (the plan's listed order)
   because `agent_logic.py` depends on all three.
 
