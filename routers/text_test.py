@@ -13,9 +13,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
 from services.agent_logic import (
     process_agent_text_response,
-    handle_user_slot_query,
-    handle_date_selection_in_booking,
+    handle_booking_function_call,
 )
+from services.webhook_dispatcher import dispatch_call_completed
 from services.conversation_logger import ConversationLogger
 
 load_dotenv()
@@ -42,7 +42,7 @@ def load_agent_config_for_text() -> dict:
     # Inject current date and time
     current_time: str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
     
-    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
+    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nHOTEL DATA:\n{clinic_data}"
     agent_config["agent"]["think"]["prompt"] += context_str
     print(f"[TEXT-TEST] Injecting time and clinic data into prompt.")
 
@@ -93,13 +93,18 @@ async def text_chat(websocket: WebSocket) -> None:
     conversation_state: dict = {
         "first_name": None,
         "last_name": None,
-        "appointment_date": None,
-        "appointment_time": None,
-        "reason": None,
+        "phone_number": None,
+        "room_type": None,
+        "check_in_date": None,
+        "check_out_date": None,
+        "number_of_guests": None,
+        "special_requests": None,
         "booking_confirmed": False,
+        "booking_id": None,
         "session_should_end": False,
         "last_message_is_payload": False,
     }
+    session_start: datetime = datetime.utcnow()
 
     # Shared flag so all tasks know when to stop
     session_active: bool = True
@@ -250,51 +255,10 @@ async def text_chat(websocket: WebSocket) -> None:
 
                             result = f"Function '{fn_name}' is not available."
 
-                            if fn_name == "book_appointment":
-                                from services.database import book_appointment as db_book_appt
-                                from services.tools import parse_date, check_availability, get_available_slots_tool
-
-                                first_name = fn_input.get("first_name", "").strip()
-                                last_name  = fn_input.get("last_name", "").strip()
-                                date_str   = fn_input.get("date", "").strip()
-                                time_str   = fn_input.get("time", "").strip()
-                                reason     = fn_input.get("reason", "").strip()
-
-                                missing = [f for f, v in {
-                                    "first_name": first_name, "last_name": last_name,
-                                    "date": date_str, "time": time_str, "reason": reason,
-                                }.items() if not v]
-                                if missing:
-                                    result = f"Missing fields: {', '.join(missing)}. Please ask the patient to provide them."
-                                else:
-                                    real_date = parse_date(date_str)
-                                    if not real_date:
-                                        result = "Could not understand the date. Please ask the patient to repeat it clearly."
-                                    elif check_availability(real_date, time_str):
-                                        success = db_book_appt(first_name, last_name, real_date, time_str, reason)
-                                        if success:
-                                            conversation_state.update({
-                                                "first_name": first_name, "last_name": last_name,
-                                                "appointment_date": real_date, "appointment_time": time_str,
-                                                "reason": reason, "booking_confirmed": True,
-                                                "_booking_just_confirmed": True,
-                                            })
-                                            result = (
-                                                f"Appointment confirmed. Booked for {first_name} {last_name} "
-                                                f"on {real_date} at {time_str} for {reason}. "
-                                                f"Warmly tell the patient their appointment is booked, then ask: "
-                                                f"'Is there anything else I can help you with today?' "
-                                                f"Do NOT say goodbye or end the call — wait for the patient's response."
-                                            )
-                                        else:
-                                            result = "Booking failed due to a system error. Please let the patient know and apologise."
-                                    else:
-                                        free_slots = get_available_slots_tool(real_date)
-                                        slots_str = ", ".join(free_slots) if free_slots else "no available slots"
-                                        result = (
-                                            f"That slot is unavailable. Available times on {real_date}: {slots_str}. "
-                                            f"Ask the patient to choose another time."
-                                        )
+                            if fn_name == "book_room":
+                                result = await handle_booking_function_call(
+                                    fn_input, conversation_state, dg_agent, None
+                                )
 
                             try:
                                 await dg_agent.send(json.dumps({
@@ -347,28 +311,9 @@ async def text_chat(websocket: WebSocket) -> None:
                         print(f"[TEXT-TEST] User: {user_text}")
                         logger.log("USER", user_text)
 
-                        # Step A: Explicit slot/date-availability query.
-                        # Fires when user asks 'which slots are free' or 'which dates'.
-                        # Queries DB and injects real data for Sarah to relay.
-                        slot_query_detected: bool = await handle_user_slot_query(
-                            user_text, conversation_state, dg_agent
-                        )
-
-                        if slot_query_detected:
-                            print("[TEXT-TEST] Slot/date query handled via DB injection.")
-                            continue
-
-                        # Step B: Booking flow date selection.
-                        # Fires when user mentions a date while we already have their name.
-                        # Proactively fetches and injects real available slots for that date
-                        # so Sarah tells the user the options rather than asking them to guess.
-                        date_injected: bool = await handle_date_selection_in_booking(
-                            user_text, conversation_state, dg_agent
-                        )
-                        # Do NOT stop here -- still send the user message so Sarah
-                        # has full context (date + system slots data together).
-
-                        # Step C: Normal path -- forward user text to Deepgram agent
+                        # Forward user text to the Deepgram agent. The hotel flow
+                        # has no server-side slot injection — the agent gathers all
+                        # reservation fields itself and calls book_room.
                         inject_message: dict = {
                             "type": "InjectUserMessage",
                             "content": user_text
@@ -466,6 +411,18 @@ async def text_chat(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        # call.completed webhook (web chat -> call_sid is null per the contract)
+        try:
+            dispatch_call_completed({
+                "caller_id": "web-chat",
+                "to_number": "web-chat",
+                "duration_seconds": int((datetime.utcnow() - session_start).total_seconds()),
+                "booking_confirmed": bool(conversation_state.get("booking_confirmed")),
+                "booking_id": conversation_state.get("booking_id"),
+            }, None)
+        except Exception as e:
+            print(f"[TEXT-TEST] call.completed dispatch error: {e}")
+
         logger.log_event("Session ended")
         logger.close()
         print(f"[TEXT-TEST] Session ended. Log saved to: {logger.file_path}")

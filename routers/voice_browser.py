@@ -5,7 +5,8 @@ import os
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from dotenv import load_dotenv
-from services.agent_logic import process_agent_text_response, handle_user_slot_query, handle_date_selection_in_booking
+from services.agent_logic import process_agent_text_response, handle_booking_function_call
+from services.webhook_dispatcher import dispatch_call_completed
 
 load_dotenv()
 
@@ -30,7 +31,7 @@ def load_voice_config() -> dict:
     config["agent"]["listen"]["provider"]["endpointing"] = 1200
 
     current_time = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-    config["agent"]["think"]["prompt"] += f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
+    config["agent"]["think"]["prompt"] += f"\n\nCONTEXT: Today is {current_time}.\n\nHOTEL DATA:\n{clinic_data}"
     return config
 
 
@@ -54,14 +55,16 @@ async def voice_chat(websocket: WebSocket):
         return
 
     conversation_state = {
-        "first_name": None, "last_name": None,
-        "appointment_date": None, "appointment_time": None,
-        "reason": None, "booking_confirmed": False,
+        "first_name": None, "last_name": None, "phone_number": None,
+        "room_type": None, "check_in_date": None, "check_out_date": None,
+        "number_of_guests": None, "special_requests": None,
+        "booking_confirmed": False, "booking_id": None,
         "session_should_end": False,
         "last_message_is_payload": False,
     }
 
     session_active = True
+    session_start = datetime.utcnow()
 
     try:
         async with websockets.connect(
@@ -129,26 +132,9 @@ async def voice_chat(websocket: WebSocket):
                                 content = msg.get("content", "")
                                 role    = msg.get("role", "assistant")
 
-                                if role == "user":
-                                    # Deepgram echoes InjectUserMessage back as role="user".
-                                    # Check pending injection counter so we skip the echo —
-                                    # don't show it in transcript and don't re-inject.
-                                    pending_echoes = conversation_state.get("_pending_echoes", 0)
-                                    if pending_echoes > 0:
-                                        conversation_state["_pending_echoes"] = pending_echoes - 1
-                                        continue
-
-                                    # Real user speech — run slot/date injection
-                                    handled = await handle_user_slot_query(content, conversation_state, dg_agent)
-                                    if handled:
-                                        conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
-                                    else:
-                                        injected = await handle_date_selection_in_booking(content, conversation_state, dg_agent)
-                                        if injected:
-                                            conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
-                                else:
-                                    # Only run agent logic processing on assistant messages to avoid
-                                    # farewell detection or JSON parsing triggering on user speech.
+                                if role == "assistant":
+                                    # Only run agent logic on assistant messages to avoid
+                                    # farewell detection or JSON parsing firing on user speech.
                                     conversation_state = await process_agent_text_response(
                                         content, conversation_state, dg_agent
                                     )
@@ -188,51 +174,10 @@ async def voice_chat(websocket: WebSocket):
 
                                 result = f"Function '{fn_name}' is not available."
 
-                                if fn_name == "book_appointment":
-                                    from services.database import book_appointment as db_book_appt
-                                    from services.tools import parse_date, check_availability, get_available_slots_tool
-
-                                    first_name = fn_input.get("first_name", "").strip()
-                                    last_name  = fn_input.get("last_name", "").strip()
-                                    date_str   = fn_input.get("date", "").strip()
-                                    time_str   = fn_input.get("time", "").strip()
-                                    reason     = fn_input.get("reason", "").strip()
-
-                                    missing = [f for f, v in {
-                                        "first_name": first_name, "last_name": last_name,
-                                        "date": date_str, "time": time_str, "reason": reason,
-                                    }.items() if not v]
-                                    if missing:
-                                        result = f"Missing fields: {', '.join(missing)}. Please ask the patient to provide them."
-                                    else:
-                                        real_date = parse_date(date_str)
-                                        if not real_date:
-                                            result = "Could not understand the date. Please ask the patient to repeat it clearly."
-                                        elif check_availability(real_date, time_str):
-                                            success = db_book_appt(first_name, last_name, real_date, time_str, reason)
-                                            if success:
-                                                conversation_state.update({
-                                                    "first_name": first_name, "last_name": last_name,
-                                                    "appointment_date": real_date, "appointment_time": time_str,
-                                                    "reason": reason, "booking_confirmed": True,
-                                                    "_booking_just_confirmed": True,
-                                                })
-                                                result = (
-                                                    f"Appointment confirmed. Booked for {first_name} {last_name} "
-                                                    f"on {real_date} at {time_str} for {reason}. "
-                                                    f"Warmly tell the patient their appointment is booked, then ask: "
-                                                    f"'Is there anything else I can help you with today?' "
-                                                    f"Do NOT say goodbye or end the call — wait for the patient's response."
-                                                )
-                                            else:
-                                                result = "Booking failed due to a system error. Please let the patient know and apologise."
-                                        else:
-                                            free_slots = get_available_slots_tool(real_date)
-                                            slots_str = ", ".join(free_slots) if free_slots else "no available slots"
-                                            result = (
-                                                f"That slot is unavailable. Available times on {real_date}: {slots_str}. "
-                                                f"Ask the patient to choose another time."
-                                            )
+                                if fn_name == "book_room":
+                                    result = await handle_booking_function_call(
+                                        fn_input, conversation_state, dg_agent, None
+                                    )
 
                                 try:
                                     await dg_agent.send(json.dumps({
@@ -295,6 +240,17 @@ async def voice_chat(websocket: WebSocket):
                     await asyncio.wait_for(task, timeout=2.0)
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass
+
+            try:
+                dispatch_call_completed({
+                    "caller_id": "voice-browser",
+                    "to_number": "voice-browser",
+                    "duration_seconds": int((datetime.utcnow() - session_start).total_seconds()),
+                    "booking_confirmed": bool(conversation_state.get("booking_confirmed")),
+                    "booking_id": conversation_state.get("booking_id"),
+                }, None)
+            except Exception as e:
+                print(f"[VOICE] call.completed dispatch error: {e}")
 
     except Exception as e:
         print(f"[VOICE] Connection error: {e}")

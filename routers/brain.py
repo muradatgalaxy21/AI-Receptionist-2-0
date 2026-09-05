@@ -11,9 +11,9 @@ from starlette.websockets import WebSocketDisconnect
 from dotenv import load_dotenv
 from services.agent_logic import (
     process_agent_text_response,
-    handle_user_slot_query,
-    handle_date_selection_in_booking,
+    handle_booking_function_call,
 )
+from services.webhook_dispatcher import dispatch_call_completed
 
 load_dotenv()
 
@@ -33,7 +33,7 @@ def load_agent_config() -> dict:
         clinic_data: str = f.read()
 
     current_time: str = datetime.now().strftime("%A, %d %B %Y, %I:%M %p")
-    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nCLINIC DATA:\n{clinic_data}"
+    context_str = f"\n\nCONTEXT: Today is {current_time}.\n\nHOTEL DATA:\n{clinic_data}"
     agent_config["agent"]["think"]["prompt"] += context_str
     log("Config loaded. Time and clinic data injected.")
     return agent_config
@@ -54,13 +54,16 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
     conversation_state: dict = {
         "first_name": None,
         "last_name": None,
-        "appointment_date": None,
-        "appointment_time": None,
-        "reason": None,
+        "phone_number": None,
+        "room_type": None,
+        "check_in_date": None,
+        "check_out_date": None,
+        "number_of_guests": None,
+        "special_requests": None,
         "booking_confirmed": False,
+        "booking_id": None,
         "session_should_end": False,
         "last_message_is_payload": False,
-        "_pending_echoes": 0,
     }
 
     try:
@@ -92,12 +95,13 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                 return
 
             stream_sid: str = None
+            call_sid: str = None
             twilio_msg_count: int = 0
             dg_msg_count: int = 0
 
             # --- SENDER: Twilio → Deepgram ---
             async def send_mic_audio() -> None:
-                nonlocal stream_sid, twilio_msg_count, caller_id, to_number
+                nonlocal stream_sid, call_sid, twilio_msg_count, caller_id, to_number
                 log("SENDER task started (Twilio → Deepgram)")
                 try:
                     while True:
@@ -112,6 +116,7 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                         if event == "start":
                             start_data = data.get("start", {})
                             stream_sid = start_data.get("streamSid")
+                            call_sid = start_data.get("callSid")
                             # Twilio sends query params as customParameters inside the start event
                             custom = start_data.get("customParameters", {})
                             if custom.get("caller_id"):
@@ -193,28 +198,12 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                     log(f"  [{role}]: {content[:120]}")
                                     
                                     # Save to dynamic conversation transcript
-                                    speaker = "Patient" if role == "user" else "Sarah"
+                                    speaker = "Guest" if role == "user" else "Sarah"
                                     transcript_lines.append(f"{speaker}: {content}")
 
-                                    if role == "user":
-                                        # Deepgram echoes every InjectUserMessage back as a role="user"
-                                        # ConversationText. Skip those echoes so they don't re-trigger
-                                        # slot injection (which would cause Sarah to repeat slot data).
-                                        pending_echoes = conversation_state.get("_pending_echoes", 0)
-                                        if pending_echoes > 0:
-                                            conversation_state["_pending_echoes"] = pending_echoes - 1
-                                            log(f"Skipping injection echo (remaining={pending_echoes - 1})")
-                                        else:
-                                            handled = await handle_user_slot_query(content, conversation_state, dg_agent)
-                                            if handled:
-                                                conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
-                                            else:
-                                                injected = await handle_date_selection_in_booking(content, conversation_state, dg_agent)
-                                                if injected:
-                                                    conversation_state["_pending_echoes"] = conversation_state.get("_pending_echoes", 0) + 1
-                                    elif role == "assistant":
+                                    if role == "assistant":
                                         conversation_state = await process_agent_text_response(
-                                            content, conversation_state, dg_agent
+                                            content, conversation_state, dg_agent, call_sid
                                         )
                                         if conversation_state.get("session_should_end"):
                                             log("Farewell detected — waiting for AgentAudioDone to close.")
@@ -244,64 +233,11 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
                                     # so Deepgram never hangs waiting for a response.
                                     result = f"Function '{fn_name}' is not available."
 
-                                    if fn_name == "book_appointment":
-                                        from services.database import book_appointment as db_book_appt
-                                        from services.tools import parse_date, check_availability, get_available_slots_tool
-
-                                        first_name = fn_input.get("first_name", "").strip()
-                                        last_name  = fn_input.get("last_name", "").strip()
-                                        date_str   = fn_input.get("date", "").strip()
-                                        time_str   = fn_input.get("time", "").strip()
-                                        reason     = fn_input.get("reason", "").strip()
-
-                                        # Guard: all fields must be present
-                                        missing = [f for f, v in {
-                                            "first_name": first_name,
-                                            "last_name": last_name,
-                                            "date": date_str,
-                                            "time": time_str,
-                                            "reason": reason,
-                                        }.items() if not v]
-                                        if missing:
-                                            result = f"Missing fields: {', '.join(missing)}. Please ask the patient to provide them."
-                                            log(f"FunctionCall missing fields: {missing}")
-                                        else:
-                                            real_date = parse_date(date_str)
-                                            if not real_date:
-                                                result = "Could not understand the date. Please ask the patient to repeat it clearly."
-                                                log(f"parse_date returned None for: {date_str}")
-                                            elif check_availability(real_date, time_str):
-                                                success = db_book_appt(first_name, last_name, real_date, time_str, reason)
-                                                if success:
-                                                    conversation_state.update({
-                                                        "first_name": first_name,
-                                                        "last_name": last_name,
-                                                        "appointment_date": real_date,
-                                                        "appointment_time": time_str,
-                                                        "reason": reason,
-                                                        "booking_confirmed": True,
-                                                        "_booking_just_confirmed": True,
-                                                    })
-                                                    result = (
-                                                        f"Appointment confirmed. Booked for {first_name} {last_name} "
-                                                        f"on {real_date} at {time_str} for {reason}. "
-                                                        f"Warmly tell the patient their appointment is booked, then ask: "
-                                                        f"'Is there anything else I can help you with today?' "
-                                                        f"Do NOT say goodbye, 'have a great day', or end the call — "
-                                                        f"the call is still open. Wait for the patient's response."
-                                                    )
-                                                    log(f"Booking confirmed: {first_name} {last_name} {real_date} {time_str}")
-                                                else:
-                                                    result = "Booking failed due to a system error. Please let the patient know and apologise."
-                                                    log("db_book_appt returned False")
-                                            else:
-                                                free_slots = get_available_slots_tool(real_date)
-                                                slots_str  = ", ".join(free_slots) if free_slots else "no available slots"
-                                                result = (
-                                                    f"That slot is unavailable. Available times on {real_date}: {slots_str}. "
-                                                    f"Ask the patient to choose another time."
-                                                )
-                                                log(f"Slot unavailable: {real_date} {time_str}. Free: {slots_str}")
+                                    if fn_name == "book_room":
+                                        result = await handle_booking_function_call(
+                                            fn_input, conversation_state, dg_agent, call_sid
+                                        )
+                                        log(f"book_room -> {result[:120]}")
 
                                     await dg_agent.send(json.dumps({
                                         "type": "FunctionCallResponse",
@@ -374,31 +310,45 @@ async def process_audio_stream(websocket: WebSocket, caller_id: str = "unknown",
 
             log(f"Call session ended. Twilio frames={twilio_msg_count}, Deepgram msgs={dg_msg_count}")
 
-            # --- Log call to CSV ---
+            end_time: datetime = datetime.utcnow()
+            call_duration: float = (end_time - start_time).total_seconds()
+            booking_confirmed: bool = bool(conversation_state.get("booking_confirmed"))
+            guest_name: str = ""
+            if conversation_state.get("first_name") and conversation_state.get("last_name"):
+                guest_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
+
+            # --- Fire call.completed webhook (fire-and-forget) ---
+            try:
+                dispatch_call_completed({
+                    "caller_id": caller_id,
+                    "to_number": to_number,
+                    "duration_seconds": int(call_duration),
+                    "booking_confirmed": booking_confirmed,
+                    "booking_id": conversation_state.get("booking_id"),
+                }, call_sid)
+            except Exception as e:
+                log(f"ERROR dispatching call.completed: {e}")
+
+            # --- Log call to the database ---
             try:
                 from services.call_logger import append_call_log
-                end_time: datetime = datetime.utcnow()
-                call_duration: float = (end_time - start_time).total_seconds()
-                patient_name: str = ""
-                if conversation_state.get("first_name") and conversation_state.get("last_name"):
-                    patient_name = f"{conversation_state['first_name']} {conversation_state['last_name']}"
-                intent: str = "Booking" if conversation_state.get("booking_confirmed") else "FAQ"
-                status: str = "Confirmed" if conversation_state.get("booking_confirmed") else "Completed"
+                intent: str = "Reservation" if booking_confirmed else "FAQ"
+                status: str = "Confirmed" if booking_confirmed else "Completed"
                 transcript_str = "\n".join(transcript_lines)
                 append_call_log(
                     timestamp=end_time.isoformat(),
                     caller_id=caller_id,
                     to_number=to_number,
-                    patient_name=patient_name,
+                    patient_name=guest_name,
                     call_duration=call_duration,
                     intent=intent,
                     summary=conversation_state.get("last_summary", ""),
                     transcript=transcript_str,
                     status=status,
-                    estimated_value=100.0 if conversation_state.get("booking_confirmed") else 0.0,
+                    estimated_value=float(conversation_state.get("total_cost") or 0.0),
                     recording_url="",
                 )
-                log(f"Call logged. Caller={caller_id}, Dialed={to_number}, Duration={call_duration:.1f}s, Patient={patient_name or 'unknown'}")
+                log(f"Call logged. Caller={caller_id}, Dialed={to_number}, Duration={call_duration:.1f}s, Guest={guest_name or 'unknown'}")
             except Exception as e:
                 log(f"ERROR logging call: {e}")
                 log(traceback.format_exc())
