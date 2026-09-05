@@ -27,7 +27,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [x] [DONE] Implement stay duration and pricing calculation helper in `services/tools.py` — `calculate_nights()`, `match_room_type()`, `get_nightly_rate()`, `price_reservation()` (reads rates from `data/data.json`; `total_cost = nights * nightly_rate` per the webhook contract). Also fixed a latent `parse_date()` bug: `dayfirst=True` mis-read `YYYY-MM-DD` strings (`2026-09-10` -> Oct 9), which `book_room`'s ISO dates would hit every time. `python services/tools.py` self-check covers both.
 - [x] [DONE] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py` — `dispatch_booking_created()` / `dispatch_call_completed()` schedule a background `httpx` POST (10s timeout) and return immediately; all errors logged + swallowed. Builds the `{event, timestamp, call_sid, data}` envelope from `docs/webhook_payload_contracts.md`. When `MAKE_WEBHOOK_URL` is unset/placeholder it logs the payload and no-ops (Engineer B hasn't delivered the URL yet). `python services/webhook_dispatcher.py` self-check covers envelope + no-URL path.
 - [x] [DONE] Hook `booking.created` and `call.completed` into `routers/brain.py` and `routers/text_test.py` — both routers now dispatch the `book_room` function call to `handle_booking_function_call` (which fires `booking.created` from inside `finalize_booking`), init the hotel `conversation_state`, and fire `call.completed` on session end (brain.py also captures Twilio `callSid` and logs `total_cost` as the call's estimated value). Dental slot-injection wiring removed. `routers/voice_browser.py` got the same treatment (not in the checklist, but it imports the same shared logic and would otherwise still book dental appointments / crash the app import). Prompt context label `CLINIC DATA:` -> `HOTEL DATA:` in all three. `python -c "import main"` loads the full app clean.
-- [ ] [TODO] Update web chat testing interface in `static/test_chat.html`
+- [x] [DONE] Update web chat testing interface in `static/test_chat.html` — retitled/rethemed for the Grand Horizon Hotel (Sarah "AI Concierge", gold + navy palette swapped in for the blue/purple), added a row of quick-action chips (Book a room, Room rates, Check-in times, Pet policy, Airport shuttle) that prefill and send a test prompt; chips enable/disable with the connection. WebSocket logic untouched. (Pre-existing glow-shadow styling left as-is — cosmetic, outside Track A scope.)
 - [ ] [TODO] Google Calendar API synchronization bridge in `services/calender.py`
 
 ## Track B: Cloud Automations, GHL & Presentation (Engineer B)
@@ -70,6 +70,7 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
   wired `book_room` -> `handle_booking_function_call`, hotel
   `conversation_state`, `call.completed` on session end, `HOTEL DATA:`
   label. brain.py captures Twilio `callSid`.
+- `static/test_chat.html` — hotel retheme + quick-action chips.
 - Built the leaf modules ahead of the state machine (the plan's listed order)
   because `agent_logic.py` depends on all three.
 

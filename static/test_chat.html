@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Text-based testing interface for the AI Receptionist agent - Doctor Farooq's Dental Clinic">
-    <title>AI Receptionist - Sarah | Doctor Farooq's Dental Clinic</title>
+    <meta name="description" content="Text-based testing interface for the Grand Horizon Hotel AI concierge, Sarah">
+    <title>Grand Horizon Hotel - Sarah, AI Concierge</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         /* -------------------------------------------------- */
@@ -19,14 +19,14 @@
             --text-primary:    #e8eaf0;
             --text-secondary:  #8b8fa8;
             --text-muted:      #4e5270;
-            --accent-blue:     #4f8cff;
-            --accent-purple:   #7c5cfc;
+            --accent-blue:     #c8a24b;
+            --accent-purple:   #1f4e6d;
             --agent-bubble:    #1a2240;
             --user-bubble:     #1e3060;
             --system-text:     #525878;
             --success:         #34d399;
             --danger:          #f87171;
-            --shadow-glow:     0 0 30px rgba(79, 140, 255, 0.18);
+            --shadow-glow:     0 0 30px rgba(200, 162, 75, 0.18);
             --radius-bubble:   18px;
             --transition:      0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -63,8 +63,8 @@
             gap: 0;
             /* Subtle animated gradient backdrop */
             background:
-                radial-gradient(ellipse 70% 60% at 50% -10%, rgba(79,140,255,0.12) 0%, transparent 60%),
-                radial-gradient(ellipse 50% 40% at 90% 90%, rgba(124,92,252,0.10) 0%, transparent 55%),
+                radial-gradient(ellipse 70% 60% at 50% -10%, rgba(200,162,75,0.12) 0%, transparent 60%),
+                radial-gradient(ellipse 50% 40% at 90% 90%, rgba(31,78,109,0.10) 0%, transparent 55%),
                 var(--bg-primary);
             transition: opacity var(--transition), transform var(--transition);
             z-index: 10;
@@ -120,15 +120,15 @@
             font-size: 42px;
             font-weight: 800;
             color: white;
-            box-shadow: 0 0 40px rgba(79,140,255,0.35);
+            box-shadow: 0 0 40px rgba(200,162,75,0.35);
             position: relative;
             z-index: 1;
             animation: avatarPulse 3.5s ease-in-out infinite;
         }
 
         @keyframes avatarPulse {
-            0%, 100% { box-shadow: 0 0 40px rgba(79,140,255,0.35); }
-            50%       { box-shadow: 0 0 60px rgba(124,92,252,0.45); }
+            0%, 100% { box-shadow: 0 0 40px rgba(200,162,75,0.35); }
+            50%       { box-shadow: 0 0 60px rgba(31,78,109,0.45); }
         }
 
         .welcome-clinic {
@@ -144,7 +144,7 @@
             font-size: 34px;
             font-weight: 800;
             letter-spacing: -0.8px;
-            background: linear-gradient(135deg, #fff 30%, #a0b4ff);
+            background: linear-gradient(135deg, #fff 30%, #e8d6a8);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -171,14 +171,14 @@
             font-weight: 600;
             font-family: 'Inter', sans-serif;
             cursor: pointer;
-            box-shadow: 0 4px 24px rgba(79,140,255,0.35);
+            box-shadow: 0 4px 24px rgba(200,162,75,0.35);
             transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
             letter-spacing: -0.2px;
         }
 
         #startBtn:hover {
             transform: translateY(-2px) scale(1.03);
-            box-shadow: 0 8px 36px rgba(79,140,255,0.5);
+            box-shadow: 0 8px 36px rgba(200,162,75,0.5);
         }
 
         #startBtn:active {
@@ -224,7 +224,7 @@
             height: 7px;
             border-radius: 50%;
             background: var(--success);
-            box-shadow: 0 0 6px rgba(52,211,153,0.6);
+            box-shadow: 0 0 6px rgba(52,180,133,0.6);
             animation: idleBlink 2.5s ease-in-out infinite;
         }
 
@@ -311,7 +311,7 @@
 
         .status-dot.connected {
             background: var(--success);
-            box-shadow: 0 0 6px rgba(52,211,153,0.5);
+            box-shadow: 0 0 6px rgba(52,180,133,0.5);
         }
 
         /* End call button */
@@ -350,7 +350,7 @@
             scroll-behavior: smooth;
             /* Faint grid pattern for depth */
             background:
-                radial-gradient(ellipse 60% 40% at 50% 0%, rgba(79,140,255,0.04) 0%, transparent 70%),
+                radial-gradient(ellipse 60% 40% at 50% 0%, rgba(200,162,75,0.04) 0%, transparent 70%),
                 var(--bg-primary);
         }
 
@@ -386,13 +386,13 @@
         .message.assistant .message-bubble {
             background: var(--agent-bubble);
             border-bottom-left-radius: 4px;
-            border: 1px solid rgba(79,140,255,0.10);
+            border: 1px solid rgba(200,162,75,0.10);
         }
 
         .message.user .message-bubble {
             background: var(--user-bubble);
             border-bottom-right-radius: 4px;
-            border: 1px solid rgba(79,140,255,0.14);
+            border: 1px solid rgba(200,162,75,0.14);
         }
 
         .message.system .message-bubble {
@@ -470,7 +470,7 @@
             justify-content: center;
             font-size: 26px;
             font-weight: 800;
-            box-shadow: 0 0 30px rgba(79,140,255,0.35);
+            box-shadow: 0 0 30px rgba(200,162,75,0.35);
             animation: goodbyePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
         }
 
@@ -523,7 +523,7 @@
 
         .input-field:focus {
             border-color: var(--accent-blue);
-            box-shadow: 0 0 0 3px rgba(79,140,255,0.10);
+            box-shadow: 0 0 0 3px rgba(200,162,75,0.10);
         }
 
         .input-field::placeholder { color: var(--text-muted); }
@@ -560,6 +560,33 @@
             text-align: center;
         }
 
+        /* Quick-action chips -- prefilled hotel test prompts */
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .quick-chip {
+            padding: 7px 13px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: border-color var(--transition), color var(--transition);
+        }
+
+        .quick-chip:hover:not(:disabled) {
+            border-color: var(--accent-blue);
+            color: var(--text-primary);
+        }
+
+        .quick-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
         /* ---- Responsive ---- */
         @media (max-width: 600px) {
             .chat-area  { padding: 14px; }
@@ -581,9 +608,9 @@
             <div class="welcome-avatar">S</div>
         </div>
 
-        <div class="welcome-clinic">Doctor Farooq's Dental Clinic</div>
+        <div class="welcome-clinic">Grand Horizon Hotel</div>
         <div class="welcome-name">Hi, I&rsquo;m Sarah</div>
-        <div class="welcome-tagline">Your AI Receptionist &mdash; here to help you book appointments</div>
+        <div class="welcome-tagline">Your AI Concierge &mdash; here to help you reserve a room</div>
 
         <button id="startBtn" onclick="startConversation()">
             <!-- Microphone icon -->
@@ -593,7 +620,7 @@
                 <line x1="12" y1="19" x2="12" y2="23"/>
                 <line x1="8"  y1="23" x2="16" y2="23"/>
             </svg>
-            <span id="startBtnLabel">Start Conversation</span>
+            <span id="startBtnLabel">Chat with Sarah</span>
             <div class="btn-spinner" id="btnSpinner"></div>
         </button>
 
@@ -612,7 +639,7 @@
         <div class="header">
             <div class="header-avatar">S</div>
             <div class="header-info">
-                <div class="header-name">Sarah &mdash; AI Receptionist</div>
+                <div class="header-name">Sarah &mdash; AI Concierge</div>
                 <div class="header-status">
                     <span class="status-dot" id="statusDot"></span>
                     <span id="statusText">Connecting&hellip;</span>
@@ -634,12 +661,19 @@
         <!-- Goodbye flash overlay -->
         <div id="goodbyeOverlay">
             <div class="goodbye-icon">S</div>
-            <div class="goodbye-text">Goodbye! See you soon.</div>
+            <div class="goodbye-text">Thank you for choosing the Grand Horizon Hotel.</div>
             <div class="goodbye-sub">Returning to the main screen&hellip;</div>
         </div>
 
         <!-- Input -->
         <div class="input-area">
+            <div class="quick-actions" id="quickActions">
+                <button class="quick-chip" disabled data-fill="I'd like to book a room, please.">Book a room</button>
+                <button class="quick-chip" disabled data-fill="What are your room types and nightly rates?">Room rates</button>
+                <button class="quick-chip" disabled data-fill="What time is check-in and check-out?">Check-in times</button>
+                <button class="quick-chip" disabled data-fill="Do you allow pets?">Pet policy</button>
+                <button class="quick-chip" disabled data-fill="Is there an airport shuttle?">Airport shuttle</button>
+            </div>
             <div class="input-wrapper">
                 <textarea
                     id="messageInput"
@@ -676,8 +710,13 @@
     const startBtnLabel  = document.getElementById('startBtnLabel');
     const btnSpinner     = document.getElementById('btnSpinner');
     const goodbyeOverlay = document.getElementById('goodbyeOverlay');
+    const quickChips     = Array.from(document.querySelectorAll('.quick-chip'));
 
     let ws = null;
+
+    function setChipsEnabled(on) {
+        quickChips.forEach(c => { c.disabled = !on; });
+    }
 
     // ================================================================
     // Screen transitions
@@ -732,6 +771,7 @@
             statusText.textContent = 'Connected to Sarah';
             messageInput.disabled = false;
             sendBtn.disabled = false;
+            setChipsEnabled(true);
             messageInput.focus();
         };
 
@@ -773,6 +813,7 @@
             statusText.textContent = 'Disconnected';
             messageInput.disabled = true;
             sendBtn.disabled = true;
+            setChipsEnabled(false);
 
             // Only show the disconnect notice if the goodbye overlay is NOT up
             // (i.e. this was not a clean agent-initiated close)
@@ -795,6 +836,7 @@
         // Disable input immediately
         messageInput.disabled = true;
         sendBtn.disabled = true;
+        setChipsEnabled(false);
         statusText.textContent = 'Session ended';
         statusDot.classList.remove('connected');
 
@@ -823,6 +865,7 @@
         addMessage('system', 'You ended the conversation.');
         messageInput.disabled = true;
         sendBtn.disabled = true;
+        setChipsEnabled(false);
         statusDot.classList.remove('connected');
         statusText.textContent = 'Disconnected';
         setTimeout(showWelcome, 1800);
@@ -894,6 +937,15 @@
     // Event listeners
     // ================================================================
     sendBtn.addEventListener('click', sendMessage);
+
+    // Quick-action chips: drop the phrase into the box and send it
+    quickChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            if (messageInput.disabled) return;
+            messageInput.value = chip.dataset.fill;
+            sendMessage();
+        });
+    });
 
     messageInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
