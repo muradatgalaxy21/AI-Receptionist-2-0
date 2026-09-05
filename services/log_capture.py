@@ -50,6 +50,14 @@ class LogCapture:
     def flush(self) -> None:
         self.original_stdout.flush()
 
+    def __getattr__(self, name: str):
+        # Delegate anything we don't implement (isatty, fileno, encoding,
+        # writable, ...) to the real stdout, so this stays a drop-in stream.
+        # uvicorn's colour logging calls sys.stdout.isatty() at startup and
+        # crashed here before this existed. Reading __dict__ directly avoids
+        # recursing back into __getattr__.
+        return getattr(self.__dict__["original_stdout"], name)
+
     def append(self, msg: str) -> None:
         # Strip ANSI escape terminal colors to keep the web dashboard terminal clean
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')

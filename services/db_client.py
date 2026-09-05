@@ -105,15 +105,13 @@ class DatabaseClient:
             )
         ''')
         
-        # Alter table failsafes to add columns if database already existed
-        try:
-            self.execute_write("ALTER TABLE calls ADD COLUMN to_number TEXT")
-        except Exception:
-            pass
-        try:
-            self.execute_write("ALTER TABLE calls ADD COLUMN transcript TEXT")
-        except Exception:
-            pass
+        # Failsafe for DBs created by an older schema: add any missing columns.
+        # Check first so we never fire an ALTER that SQLite would reject as a
+        # "duplicate column" (which the writer would log as an error).
+        existing_cols = {row[1] for row in self.execute("PRAGMA table_info(calls)")}
+        for col, coltype in (("to_number", "TEXT"), ("transcript", "TEXT")):
+            if col not in existing_cols:
+                self.execute_write(f"ALTER TABLE calls ADD COLUMN {col} {coltype}")
 
         print("[DB] Tables verified/initialized.")
 
