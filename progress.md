@@ -25,7 +25,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
 - [x] [DONE] Implement unique booking ID generator in `services/booking_id.py` — `generate_booking_id()` returns `HTL-####X` (4 digits + capital letter). In-process dedupe set; `python services/booking_id.py` self-check asserts format + uniqueness over 5000 draws.
 - [x] [DONE] Implement stay duration and pricing calculation helper in `services/tools.py` — `calculate_nights()`, `match_room_type()`, `get_nightly_rate()`, `price_reservation()` (reads rates from `data/data.json`; `total_cost = nights * nightly_rate` per the webhook contract). Also fixed a latent `parse_date()` bug: `dayfirst=True` mis-read `YYYY-MM-DD` strings (`2026-09-10` -> Oct 9), which `book_room`'s ISO dates would hit every time. `python services/tools.py` self-check covers both.
-- [ ] [TODO] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py`
+- [x] [DONE] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py` — `dispatch_booking_created()` / `dispatch_call_completed()` schedule a background `httpx` POST (10s timeout) and return immediately; all errors logged + swallowed. Builds the `{event, timestamp, call_sid, data}` envelope from `docs/webhook_payload_contracts.md`. When `MAKE_WEBHOOK_URL` is unset/placeholder it logs the payload and no-ops (Engineer B hasn't delivered the URL yet). `python services/webhook_dispatcher.py` self-check covers envelope + no-URL path.
 - [ ] [TODO] Hook `booking.created` and `call.completed` into `routers/brain.py` and `routers/text_test.py`
 - [ ] [TODO] Update web chat testing interface in `static/test_chat.html`
 - [ ] [TODO] Google Calendar API synchronization bridge in `services/calender.py`
@@ -61,6 +61,8 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
 - `services/tools.py` — hotel pricing helpers (`calculate_nights`,
   `match_room_type`, `get_nightly_rate`, `price_reservation`); fixed
   `parse_date()` ISO-date (`dayfirst`) bug.
+- `services/webhook_dispatcher.py` — non-blocking `httpx` POST to
+  `MAKE_WEBHOOK_URL`; no-ops with a logged payload until the URL is set.
 - Built the leaf modules ahead of the state machine (the plan's listed order)
   because `agent_logic.py` depends on all three.
 
