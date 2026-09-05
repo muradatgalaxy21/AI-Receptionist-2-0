@@ -24,7 +24,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [x] [DONE] Rewrite system prompt for Hotel Sarah in `data/config.json` — Sarah is now the Grand Horizon Hotel front desk. Prompt collects the 8 reservation fields one by one, confirms, then calls the new `book_room` function (replaces `book_appointment`). Greeting + FAQ handling reworked for hotel domain; voice/silence rules kept.
 - [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
 - [x] [DONE] Implement unique booking ID generator in `services/booking_id.py` — `generate_booking_id()` returns `HTL-####X` (4 digits + capital letter). In-process dedupe set; `python services/booking_id.py` self-check asserts format + uniqueness over 5000 draws.
-- [ ] [TODO] Implement stay duration and pricing calculation helper in `services/tools.py`
+- [x] [DONE] Implement stay duration and pricing calculation helper in `services/tools.py` — `calculate_nights()`, `match_room_type()`, `get_nightly_rate()`, `price_reservation()` (reads rates from `data/data.json`; `total_cost = nights * nightly_rate` per the webhook contract). Also fixed a latent `parse_date()` bug: `dayfirst=True` mis-read `YYYY-MM-DD` strings (`2026-09-10` -> Oct 9), which `book_room`'s ISO dates would hit every time. `python services/tools.py` self-check covers both.
 - [ ] [TODO] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py`
 - [ ] [TODO] Hook `booking.created` and `call.completed` into `routers/brain.py` and `routers/text_test.py`
 - [ ] [TODO] Update web chat testing interface in `static/test_chat.html`
@@ -58,6 +58,9 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
   `book_appointment` function replaced with `book_room` (8 reservation
   fields, dates in YYYY-MM-DD). New greeting.
 - `services/booking_id.py` — `generate_booking_id()` -> `HTL-####X`.
+- `services/tools.py` — hotel pricing helpers (`calculate_nights`,
+  `match_room_type`, `get_nightly_rate`, `price_reservation`); fixed
+  `parse_date()` ISO-date (`dayfirst`) bug.
 - Built the leaf modules ahead of the state machine (the plan's listed order)
   because `agent_logic.py` depends on all three.
 
