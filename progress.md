@@ -46,6 +46,75 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ## Session Log
 
+### Session 3 — 2026-09-05 (Engineer A) — CLOSED
+
+Live verification of Track A + fixed every bug the live run surfaced. Track C
+still blocked on Engineer B's `MAKE_WEBHOOK_URL`.
+
+**Verified live (was self-checks only before):**
+- Server boots; `/`, `/chat`, `/static/test_chat.html` all 200.
+- Full web-chat reservation against Deepgram end to end: greeting -> 8 fields
+  gathered one by one -> `book_room` function call -> `finalize_booking` prices
+  the stay (3 nights x $199 = $597) -> Booking ID minted -> `booking.created`
+  envelope built (no-op, `MAKE_WEBHOOK_URL` still placeholder) -> Google
+  Calendar mock mirror -> `call.completed` fires on session end -> **Sarah
+  speaks the Booking ID back to the guest**. Ran clean start to finish.
+
+**Bugs found and fixed this session:**
+- `routers/text_test.py` — `websockets.connect(additional_headers=...)` is the
+  websockets 13+ kwarg; pinned version is 12.0 which needs `extra_headers=`.
+  Web chat could never open the Deepgram socket. Now matches brain.py /
+  voice_browser.py. Also added `Error` / `Warning` / unhandled-type logging to
+  the agent receiver (brain.py already had it) — that is what surfaced the
+  FunctionCallResponse bug below.
+- `services/agent_logic.py` — `FAREWELL_PHRASES` contained
+  `"thank you for calling"`, which is the *opening* of the Grand Horizon
+  greeting ("Thank you for calling the Grand Horizon Hotel..."). `is_farewell()`
+  returned True on Sarah's first line, so every session (voice and text) ended
+  on the greeting. Removed that phrase; real farewells still caught by
+  `"goodbye"` / `"have a great day"`. Added a regression assert to the
+  `__main__` self-check.
+- `routers/brain.py`, `routers/text_test.py`, `routers/voice_browser.py` —
+  the `FunctionCallResponse` sent back to Deepgram used `{"id", "output"}`.
+  The Voice Agent API expects `{"id", "name", "content"}`. Deepgram rejected
+  it with `UNPARSABLE_CLIENT_MESSAGE` and closed the socket right after
+  `book_room`, so the booking completed server-side but Sarah never voiced the
+  confirmation. Fixed the field names in all three routers.
+- `services/db_client.py` — the `ALTER TABLE calls ADD COLUMN` failsafes ran
+  unconditionally every boot; `execute_write` logs the "duplicate column name"
+  error before the outer `try/except` can swallow it, so two red `[DB]` lines
+  printed on every startup. Now checks `PRAGMA table_info(calls)` and only
+  ALTERs columns that are actually missing.
+- `services/log_capture.py` — `LogCapture` replaces `sys.stdout` but only
+  implemented `write` / `flush`. `uvicorn.run()` (i.e. `python main.py`) calls
+  `sys.stdout.isatty()` at startup and crashed with `AttributeError`. Added
+  `__getattr__` delegating any other attribute (`isatty`, `fileno`, `encoding`,
+  ...) to the real stdout. `python main.py` now boots clean.
+
+**Test housekeeping:**
+- Deleted `tests/test_agent_text.py` and `tests/test_suppression.py` — stale
+  dental-era manual CLI scripts, no asserts, unreferenced.
+- Added `tests/test_booking_flow.py` — 12 offline asserts over `finalize_booking`
+  and both booking entry points (happy path, state mutation, idempotency,
+  missing field, over-occupancy, checkout-before-checkin, same-day checkout,
+  ISO-date regression, unknown room type, `book_room` function-call path,
+  `ready_to_book` JSON fallback path). Runs standalone
+  (`python tests/test_booking_flow.py`) or under pytest.
+
+**Verified this session:**
+- `tests/test_booking_flow.py` — 12/12.
+- `python -m services.<mod>` self-checks still pass; `python -c "import main"`
+  clean; `python main.py` boots.
+- Live Deepgram web-chat reservation completes with the Booking ID spoken back.
+
+**Left for next session:**
+- Track C joint verification, still blocked on Engineer B's `MAKE_WEBHOOK_URL` +
+  GHL. Once live: run a web-chat reservation, confirm `booking.created` reaches
+  Make.com and lands on a GHL contact/opportunity, confirm the SMS.
+- The three router `FunctionCallResponse` fixes and the farewell fix also touch
+  the Twilio voice path (`brain.py`) — worth a live phone-call check when
+  Engineer B has the Twilio number wired.
+
 ### Session 2 — 2026-09-05 (Engineer A) — CLOSED
 
 Phase 1 / Track A implementation — **all 9 items done**. Hotel = **Grand
@@ -124,14 +193,18 @@ Horizon Hotel**, receptionist persona stays **Sarah**. One commit + push to
 
 ---
 
-## Status Summary (as of end of Session 2)
+## Status Summary (as of end of Session 3)
 
-Engineer A owned scope is **100% done**:
+Engineer A owned scope is **100% done and now verified live**:
 - Phase 0 / Track 0A — 4/4
 - Phase 1 / Track A — 9/9
+- Session 3: live Deepgram web-chat reservation runs end to end; 5 bugs the
+  live run surfaced are fixed (websockets kwarg, farewell-on-greeting,
+  `FunctionCallResponse` field names x3 routers, DB duplicate-column spam,
+  `python main.py` stdout crash). Added `tests/test_booking_flow.py` (12
+  checks), removed the two stale dental test scripts.
 
-All committed one-per-feature and pushed to `origin/engineer-a` (last commit
-`chore: ignore overused-font`). Nothing left that is Engineer A only.
+Pushed to `origin/engineer-a`. Nothing left that is Engineer A only.
 
 **Still open (not Engineer A solo):**
 - Phase 0 / Track 0B and Phase 1 / Track B — all Engineer B.
