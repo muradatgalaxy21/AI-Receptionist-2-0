@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-09-05T17:22:53.834Z",
+        "reason": "Engineer A: pre-existing font in internal text-test chat UI (predates this session); Track A scope was color retheme + quick actions, not typography. Not a client deliverable."
+      }
+    ]
+  }
+}
