@@ -124,15 +124,47 @@ Horizon Hotel**, receptionist persona stays **Sarah**. One commit + push to
 
 ---
 
-## Next Session Kickoff Prompt (Phase 1)
+## Status Summary (as of end of Session 2)
+
+Engineer A owned scope is **100% done**:
+- Phase 0 / Track 0A — 4/4
+- Phase 1 / Track A — 9/9
+
+All committed one-per-feature and pushed to `origin/engineer-a` (last commit
+`chore: ignore overused-font`). Nothing left that is Engineer A only.
+
+**Still open (not Engineer A solo):**
+- Phase 0 / Track 0B and Phase 1 / Track B — all Engineer B.
+- Track C joint verification (2 items) — needs Engineer B's `MAKE_WEBHOOK_URL`
+  + GHL live first.
+
+**Waiting on from Engineer B before Track C:**
+- Real `MAKE_WEBHOOK_URL` (drop into local `.env`; dispatcher currently logs
+  the payload instead of POSTing).
+- GHL custom fields + "Hotel Reservations" pipeline + SMS workflow deployed.
+
+---
+
+## Next Session Kickoff Prompt (Track C — joint verification)
 
 Paste this to start the next session:
 
 > Read `progress.md` and `implementation_plan.md` in this repo
-> (`AI-Receptionist-2-0`). I'm Engineer A, continuing on branch `engineer-a`.
-> Phase 0 is done. Start Phase 1 / Track A — work through the unchecked
-> Phase 1 / Track A items in `progress.md` in order (hotel data, Hotel Sarah
-> prompt, booking state machine, booking-id generator, pricing helper,
-> webhook dispatcher, router wiring, test UI, calendar bridge). Update
-> `progress.md`'s checklist and Session Log as you go, and commit + push to
-> the `engineer-a` branch after each completed feature.
+> (`AI-Receptionist-2-0`). I'm Engineer A on branch `engineer-a`. Phase 0
+> Track 0A and Phase 1 Track A are 100% done and pushed. Now do Track C
+> verification for the web-chat path:
+> 1. Confirm Engineer B has delivered `MAKE_WEBHOOK_URL`; put it in local
+>    `.env` (gitignored). If not delivered yet, stop and say so.
+> 2. Start the server (`python main.py`), open `/chat`, and run a full
+>    reservation with Sarah end to end.
+> 3. Verify the `booking.created` payload actually reaches Make.com and lands
+>    on a GHL contact/opportunity, and that the confirmation SMS is received.
+> 4. Verify `call.completed` fires on session end.
+> 5. Log results in `progress.md` Session Log, tick the Track C web-chat row
+>    if it passes, and commit + push. File any code bugs found as follow-up
+>    commits on `engineer-a`.
+>
+> If Track C is blocked (no `MAKE_WEBHOOK_URL`), instead add a small hotel
+> booking test module under `tests/` (`test_booking_flow.py`) covering
+> `finalize_booking` happy path, missing fields, over-occupancy, bad dates,
+> and idempotency — then commit + push.
