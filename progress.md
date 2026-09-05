@@ -23,7 +23,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [x] [DONE] Define hotel metadata, room tiers, rates, and policies in `data/data.json` — Grand Horizon Hotel, San Diego. 4 room types (Standard Queen $149, Deluxe King $199, Executive Suite $329, Penthouse $599) with rates/occupancy/descriptions, plus amenities, policies (check-in/out, cancellation, pets, smoking, parking, resort fee, extra guests), and FAQs.
 - [x] [DONE] Rewrite system prompt for Hotel Sarah in `data/config.json` — Sarah is now the Grand Horizon Hotel front desk. Prompt collects the 8 reservation fields one by one, confirms, then calls the new `book_room` function (replaces `book_appointment`). Greeting + FAQ handling reworked for hotel domain; voice/silence rules kept.
 - [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
-- [ ] [TODO] Implement unique booking ID generator in `services/booking_id.py`
+- [x] [DONE] Implement unique booking ID generator in `services/booking_id.py` — `generate_booking_id()` returns `HTL-####X` (4 digits + capital letter). In-process dedupe set; `python services/booking_id.py` self-check asserts format + uniqueness over 5000 draws.
 - [ ] [TODO] Implement stay duration and pricing calculation helper in `services/tools.py`
 - [ ] [TODO] Create asynchronous webhook dispatcher in `services/webhook_dispatcher.py`
 - [ ] [TODO] Hook `booking.created` and `call.completed` into `routers/brain.py` and `routers/text_test.py`
@@ -57,6 +57,9 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
 - `data/config.json` prompt rewritten for Sarah at the Grand Horizon Hotel;
   `book_appointment` function replaced with `book_room` (8 reservation
   fields, dates in YYYY-MM-DD). New greeting.
+- `services/booking_id.py` — `generate_booking_id()` -> `HTL-####X`.
+- Built the leaf modules ahead of the state machine (the plan's listed order)
+  because `agent_logic.py` depends on all three.
 
 ### Session 1 — 2026-09-05 (Engineer A) — CLOSED
 
