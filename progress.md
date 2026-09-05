@@ -21,7 +21,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ## Phase 1 / Track A: Python Codebase & AI Core (Engineer A)
 - [x] [DONE] Define hotel metadata, room tiers, rates, and policies in `data/data.json` — Grand Horizon Hotel, San Diego. 4 room types (Standard Queen $149, Deluxe King $199, Executive Suite $329, Penthouse $599) with rates/occupancy/descriptions, plus amenities, policies (check-in/out, cancellation, pets, smoking, parking, resort fee, extra guests), and FAQs.
-- [ ] [TODO] Rewrite system prompt for Hotel Sarah in `data/config.json`
+- [x] [DONE] Rewrite system prompt for Hotel Sarah in `data/config.json` — Sarah is now the Grand Horizon Hotel front desk. Prompt collects the 8 reservation fields one by one, confirms, then calls the new `book_room` function (replaces `book_appointment`). Greeting + FAQ handling reworked for hotel domain; voice/silence rules kept.
 - [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
 - [ ] [TODO] Implement unique booking ID generator in `services/booking_id.py`
 - [ ] [TODO] Implement stay duration and pricing calculation helper in `services/tools.py`
@@ -54,6 +54,9 @@ persona stays **Sarah**. Commit + push to `engineer-a` after each feature.
 **Done:**
 - `data/data.json` rewritten from dental clinic to Grand Horizon Hotel: room
   tiers + nightly rates + occupancy, amenities, full policy set, FAQs.
+- `data/config.json` prompt rewritten for Sarah at the Grand Horizon Hotel;
+  `book_appointment` function replaced with `book_room` (8 reservation
+  fields, dates in YYYY-MM-DD). New greeting.
 
 ### Session 1 — 2026-09-05 (Engineer A) — CLOSED
 
