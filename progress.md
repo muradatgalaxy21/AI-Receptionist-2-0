@@ -6,7 +6,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ## Phase 0: Pre-Flight Configuration (Track 0A - Engineer A)
 - [x] [DONE] Set up Python virtual environment and verify dependencies — used `.venv` (not literally `AI-Receptionist-2-0`, since that name is already the repo folder itself; nesting a same-named venv inside it would be confusing). All packages in `requirements.txt` install clean and import clean.
-- [ ] [BLOCKED - needs Engineer A's own Deepgram account] Generate fresh Deepgram API key and configure in `.env`. `.env` is created locally (gitignored) with a placeholder `DEEPGRAM_API_KEY`; whoever has the Deepgram account must drop the real key in.
+- [x] [DONE] Generate fresh Deepgram API key and configure in `.env` — real key set locally in `.env` (gitignored, never pushed).
 - [x] [DONE] Document outbound JSON webhook payload contracts (`booking.created`, `call.completed`) — see `docs/webhook_payload_contracts.md`.
 - [x] [DONE] Configure local server settings (`PORT=8000`, `HOST=0.0.0.0`) in `.env` — also wired `main.py` to actually read `HOST`/`PORT` from env instead of hardcoding.
 
@@ -67,10 +67,8 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
   name/date/time/reason fields).
 
 **Issues / blockers:**
-- `DEEPGRAM_API_KEY` in `.env` is a placeholder — needs a real key from
-  whoever owns the Deepgram account before the server can actually run a
-  live voice/text session.
-- `MAKE_WEBHOOK_URL`, `GHL_LOCATION_ID`, `GHL_API_KEY` are also placeholders
+- `DEEPGRAM_API_KEY` real key now set in local `.env` (Track 0A fully done).
+- `MAKE_WEBHOOK_URL`, `GHL_LOCATION_ID`, `GHL_API_KEY` are still placeholders
   — depend on Engineer B's Track 0B setup.
 - No blockers on the Track A code work itself; can start immediately next
   session.
