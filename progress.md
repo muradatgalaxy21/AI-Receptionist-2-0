@@ -19,7 +19,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - [ ] [TODO] Build GHL "Hotel Reservations" Pipeline and stages
 - [ ] [TODO] Configure GHL automated SMS reservation confirmation workflow
 
-## Track A: Python Codebase & AI Core (Engineer A)
+## Phase 1 / Track A: Python Codebase & AI Core (Engineer A)
 - [ ] [TODO] Define hotel metadata, room tiers, rates, and policies in `data/data.json`
 - [ ] [TODO] Rewrite system prompt for Hotel Sarah in `data/config.json`
 - [ ] [TODO] Implement hotel booking state machine in `services/agent_logic.py`
@@ -46,7 +46,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ## Session Log
 
-### Session 1 — 2026-09-05 (Engineer A)
+### Session 1 — 2026-09-05 (Engineer A) — CLOSED
 
 **Done:**
 - Cloned repo (`AI-Receptionist-2-0`, branch `main`) locally.
@@ -59,7 +59,7 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 - Created branch `engineer-a` off `main` for all of Engineer A's future
   commits; pushed to origin.
 
-**Left for next session:**
+**Left for next session (Phase 1 / Track A):**
 - All of Track A (hotel data/prompt/state-machine/booking-id/pricing/
   webhook-dispatcher/router-wiring/test-UI/calendar). Current codebase is
   still the dental-clinic domain (`services/agent_logic.py`, `data/config.json`,
@@ -75,12 +75,15 @@ rows: Engineer A (Python core). Track 0B / Track B rows belong to Engineer B
 
 ---
 
-## Next Session Kickoff Prompt
+## Next Session Kickoff Prompt (Phase 1)
 
 Paste this to start the next session:
 
-> Read `progress.md` and `implementation_plan.md` in this repo. I'm Engineer A,
-> continuing on branch `engineer-a`. Pick up Track A from where progress.md
-> says it's left off, work through the unchecked Track A items in order,
-> update progress.md's checklist and Session Log as you go, and commit +
-> push to the `engineer-a` branch after each completed feature.
+> Read `progress.md` and `implementation_plan.md` in this repo
+> (`AI-Receptionist-2-0`). I'm Engineer A, continuing on branch `engineer-a`.
+> Phase 0 is done. Start Phase 1 / Track A — work through the unchecked
+> Phase 1 / Track A items in `progress.md` in order (hotel data, Hotel Sarah
+> prompt, booking state machine, booking-id generator, pricing helper,
+> webhook dispatcher, router wiring, test UI, calendar bridge). Update
+> `progress.md`'s checklist and Session Log as you go, and commit + push to
+> the `engineer-a` branch after each completed feature.
