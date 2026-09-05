@@ -100,4 +100,7 @@ async def media_stream(websocket: WebSocket):
 
 if __name__ == "__main__":
     # This allows you to run "python main.py" to start the server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Reads HOST/PORT from .env (Phase 0 pre-flight config) instead of hardcoding.
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
