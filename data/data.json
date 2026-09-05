@@ -1,36 +1,77 @@
 {
-  "clinic_info": {
-    "name": "Bright Smile Dental Care",
-    "doctor": "Dr. Alexander Wright",
-    "location": "1234 Maple Avenue, Suite 200, Seattle, WA 98104",
-    "contact": "+1-206-555-0199"
+  "hotel_info": {
+    "name": "Grand Horizon Hotel",
+    "brand": "Grand Horizon Hospitality Group",
+    "location": "500 Bayfront Boulevard, San Diego, CA 92101",
+    "contact": "+1-619-555-0142",
+    "email": "reservations@grandhorizonhotel.com",
+    "currency": "USD",
+    "check_in_time": "3:00 PM",
+    "check_out_time": "11:00 AM"
   },
-  "timings": {
-    "Monday": "9 AM to 6 PM",
-    "Tuesday": "9 AM to 6 PM",
-    "Wednesday": "9 AM to 6 PM",
-    "Thursday": "9 AM to 6 PM",
-    "Friday": "9 AM to 6 PM",
-    "Saturday": "9 AM to 1 PM",
-    "Sunday": "Closed"
+  "front_desk_hours": "24 hours a day, 7 days a week",
+  "room_types": {
+    "Standard Queen": {
+      "nightly_rate": 149,
+      "max_occupancy": 2,
+      "beds": "One queen bed",
+      "size_sqft": 300,
+      "description": "Comfortable room with a queen bed, work desk, smart TV, and city view."
+    },
+    "Deluxe King": {
+      "nightly_rate": 199,
+      "max_occupancy": 2,
+      "beds": "One king bed",
+      "size_sqft": 380,
+      "description": "Spacious king room with a lounge chair, premium bedding, and partial bay view."
+    },
+    "Executive Suite": {
+      "nightly_rate": 329,
+      "max_occupancy": 4,
+      "beds": "One king bed plus a sofa bed",
+      "size_sqft": 620,
+      "description": "Separate living area, wet bar, two smart TVs, and full bay view. Includes lounge access."
+    },
+    "Penthouse": {
+      "nightly_rate": 599,
+      "max_occupancy": 4,
+      "beds": "Two king beds",
+      "size_sqft": 1100,
+      "description": "Top-floor suite with wraparound terrace, dining room, and panoramic ocean view. Includes lounge access and airport transfer."
+    }
   },
-  "services_price_list": {
-    "Consultation": "$100",
-    "Scaling and Cleaning": "$150",
-    "Root Canal": "Starts from $800",
-    "Braces": "Consultation Required",
-    "Extraction": "$200"
+  "amenities": [
+    "Complimentary high-speed Wi-Fi",
+    "Outdoor rooftop pool and hot tub",
+    "24-hour fitness center",
+    "On-site restaurant and bar (The Horizon Room)",
+    "Room service until midnight",
+    "Valet and self parking",
+    "Business center and meeting rooms",
+    "Pet-friendly rooms (fee applies)",
+    "Spa treatments by appointment"
+  ],
+  "policies": {
+    "check_in": "Check-in starts at 3:00 PM. Early check-in is subject to availability.",
+    "check_out": "Check-out is by 11:00 AM. Late check-out until 2:00 PM may be arranged for a fee.",
+    "cancellation": "Free cancellation up to 48 hours before the check-in date. Cancellations inside 48 hours are charged one night plus tax.",
+    "deposit": "A one-night deposit is authorized on the card at the time of booking.",
+    "payment": "We accept all major credit cards. A valid photo ID and the card used for booking are required at check-in.",
+    "minimum_age": "Guests must be at least 21 years old to check in.",
+    "pets": "Dogs under 50 pounds are welcome in pet-friendly rooms for a 75 dollar per stay cleaning fee. Service animals stay free.",
+    "smoking": "All rooms and indoor areas are non-smoking. A 250 dollar cleaning fee applies to smoking in a room.",
+    "parking": "Valet parking is 45 dollars per night. Self parking is 30 dollars per night.",
+    "resort_fee": "A 25 dollar per night resort fee covers Wi-Fi, pool, and fitness center access.",
+    "extra_guests": "Rates are for up to two guests. Each additional guest is 25 dollars per night."
   },
-  "insurance": {
-    "accepted_providers": ["Delta Dental", "Cigna", "MetLife", "Aetna", "Guardian"],
-    "note": "Please bring your insurance card on the day of your visit. Our front desk team will verify your coverage upon arrival."
-  },
-  "new_patients": {
-    "note": "New patients are always welcome. No referral is needed. You can book your first appointment directly by calling us.",
-    "what_to_bring": "Please bring a valid photo ID and your insurance card if you have one."
-  },
-  "emergency_care": {
-    "note": "We do our best to accommodate same-day emergency appointments for patients with urgent dental needs.",
-    "direct_line": "+1-206-555-0199"
+  "faqs": {
+    "airport_distance": "Grand Horizon Hotel is about 10 minutes from San Diego International Airport.",
+    "airport_shuttle": "A complimentary airport shuttle runs every 30 minutes between 5 AM and 11 PM.",
+    "breakfast": "Breakfast is served in The Horizon Room from 6:30 AM to 10:30 AM and is 22 dollars per person, or included with Executive Suite and Penthouse bookings.",
+    "wifi": "High-speed Wi-Fi is complimentary for all guests in rooms and public areas.",
+    "pool_hours": "The rooftop pool is open daily from 7 AM to 10 PM.",
+    "parking_details": "Both valet and self parking are available on site. See the parking policy for rates.",
+    "accessible_rooms": "Accessible rooms with roll-in showers are available in every room type. Please request one when booking.",
+    "nearby": "The hotel is within walking distance of the Gaslamp Quarter, the convention center, and the waterfront."
   }
 }
