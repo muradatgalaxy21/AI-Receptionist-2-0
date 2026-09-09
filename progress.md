@@ -16,7 +16,7 @@
 - [x] [DONE] Generate Airtable Personal Access Token (scopes: `data.records:read`, `data.records:write`, `schema.bases:read`) and retrieve Base ID (`appjup9acxjGIokKZ`)
 - [x] [DONE] Connect Airtable to Make.com scenario (PAT auth, fixed initial 403 by adding `schema.bases:read` scope)
 - [x] [DONE] Fire test curl payload to `MAKE_WEBHOOK_URL` to capture sample bundle for field mapping
-- [ ] [IN PROGRESS] Map Airtable "Create a Record" module fields to webhook bubbles (booking_id, guest_name, phone_number, room_type, check_in_date, check_out_date, number_of_guests, total_cost, special_requests) — **resume here next session**
+- [x] [DONE] Map Airtable "Create a Record" module fields to webhook bubbles (booking_id, guest_name, phone_number, room_type, check_in_date, check_out_date, number_of_guests, total_cost, special_requests)
 - [ ] [TODO] Rename Airtable table from default "Table 1" to "Reservations" if not already applied in scenario
 - [ ] [TODO] Add Twilio "Send SMS" module in Make.com after Airtable record creation, using dynamic booking fields
 - [ ] [TODO] ~~Generate GHL API key / private token and retrieve GHL_LOCATION_ID~~ (dropped - using Airtable)
@@ -36,8 +36,8 @@
 - [ ] [TODO] Google Calendar API synchronization bridge in `services/calender.py`
 
 ## Track B: Cloud Automations, Airtable & Presentation (Engineer 2 / Murad)
-- [ ] [IN PROGRESS] Build Make.com scenario routing (`booking.created` and `call.completed`) - webhook + Airtable module wired, field mapping in progress
-- [ ] [TODO] Map Make.com data to Airtable `Reservations` table records
+- [x] [DONE] Build Make.com scenario routing (`booking.created` and `call.completed`) - webhook + Airtable module wired, field mapping complete
+- [x] [DONE] Map Make.com data to Airtable `Reservations` table records
 - [ ] [TODO] Build and test Twilio SMS confirmation module in Make.com with dynamic Booking ID
 - [ ] [TODO] Build 4-6 slide STARR presentation deck for client pitch
 - [ ] [TODO] Lead live demo walkthrough test
@@ -55,4 +55,4 @@
 - [ ] `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` optional, not yet needed
 
 ## Resume Point for Next Session
-Pick up at: open Make.com scenario -> Airtable "Create a Record" module -> map each field box to its matching webhook bubble from the test payload already sent -> Save -> then add Twilio SMS module after it.
+Pick up at: add Twilio "Send SMS" module in Make.com after the Airtable "Create a Record" module, wired to dynamic booking fields (booking_id, guest_name, phone_number, etc.), then test end-to-end.
