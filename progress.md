@@ -22,7 +22,7 @@
 - [x] [DONE] Connect Airtable to Make.com scenario (PAT auth, fixed initial 403 by adding `schema.bases:read` scope)
 - [x] [DONE] Fire test curl payload to `MAKE_WEBHOOK_URL` to capture sample bundle for field mapping
 - [x] [DONE] Map Airtable "Create a Record" module fields to webhook bubbles (booking_id, guest_name, phone_number, room_type, check_in_date, check_out_date, number_of_guests, total_cost, special_requests)
-- [ ] [TODO] Rename Airtable table from default "Table 1" to "Reservations" if not already applied in scenario
+- [x] [DONE] Rename Airtable table from default "Table 1" to "Reservations" - confirmed already applied (verified via Airtable meta API)
 - [x] [DONE] Add SignalWire "Send SMS" module in Make.com after Airtable record creation, using dynamic booking fields - tested, SMS received
 - [ ] [TODO] ~~Set up GoHighLevel (sub-account, number port, pipeline, workflow)~~ (dropped again 2026-09-09 - Airtable+SignalWire+Make already covers CRM+SMS, GHL would've required porting away the Tello number for no added benefit)
 
